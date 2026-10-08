@@ -43,9 +43,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   }
 
   List<Invoice> get _filtered => _store.filterInvoices(
-        q: _query,
+        search: _query,
         status: _status,
-        type: _type,
+        clientId: 'all',
         sort: _sort,
       );
 
@@ -55,14 +55,14 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
       builder: (ctx) => _StatusSheet(status: inv.status),
     );
     if (next == null || next == inv.status || !mounted) return;
-    await _store.updateInvoiceStatus(inv.invoiceId, next);
+    final u = _store.invoiceById(inv.invoiceId); if (u != null) { u.status = next; await _store.upsertInvoice(u); }
     if (mounted) {
       showAppToast(context, 'Status changed to ${statusLabel(next)}', success: true);
     }
   }
 
   Future<void> _duplicate(Invoice inv) async {
-    final copy = await _store.duplicateInvoice(inv.invoiceId);
+    final copy = _store.duplicateInvoice(inv);
     if (copy == null || !mounted) return;
     showAppToast(context, 'Duplicated as ${copy.number}', success: true);
     if (mounted) context.go('/editor/${copy.invoiceId}');

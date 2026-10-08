@@ -33,7 +33,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     if (args is Invoice) {
       inv = args;
     } else {
-      inv = Store.instance.latestInvoice();
+      inv = Store.instance.invoices.isEmpty ? null : Store.instance.invoices.first;
     }
     setState(() {
       _inv = inv;

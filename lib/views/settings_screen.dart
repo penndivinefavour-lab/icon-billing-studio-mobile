@@ -65,7 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (!ok || !mounted) return;
     setState(() => _resetting = true);
-    await _store.seed();
+    await _store.reindexVault();
     setState(() => _resetting = false);
     if (!mounted) return;
     showAppToast(context, 'Demo data restored', success: true);
@@ -74,7 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = _store.settings;
-    final business = _store.business;
+    final business = _store.businessOrDefault;
 
     return Scaffold(
       body: SafeArea(
@@ -513,7 +513,7 @@ class _BusinessSectionState extends State<_BusinessSection> {
       ..bankName = _bankName.text.trim()
       ..bankAccount = _bankAccount.text.trim()
       ..swift = _swift.text.trim();
-    await widget.store.updateBusiness(next);
+    await widget.store.upsertBusiness(next);
     if (!mounted) return;
     showAppToast(context, 'Business profile saved', success: true);
   }

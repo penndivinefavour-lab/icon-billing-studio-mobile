@@ -41,7 +41,10 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _load() async {
     final id = widget.invoiceId;
     if (id == 'template') {
-      final pending = _store.consumeTemplateSample();
+      final tpl = _templatePending;
+      final pending = tpl == null || tpl.isEmpty
+          ? null
+          : _store.consumeTemplateSample(tpl);
       if (pending != null) {
         setState(() {
           _draft = pending;
@@ -109,7 +112,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _saving = false;
 
   Future<void> _duplicate() async {
-    final copy = await _store.duplicateInvoice(_draft.invoiceId);
+    final copy = _store.duplicateInvoice(_draft);
     if (copy == null || !mounted) return;
     showAppToast(context, 'Duplicated as ${copy.number}', success: true);
     context.go('/editor/${copy.invoiceId}');

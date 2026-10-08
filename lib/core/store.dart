@@ -13,7 +13,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import '../pdf/invoice_pdf.dart';
 
 import '../models/models.dart';
 import 'constants.dart';
@@ -29,271 +36,279 @@ class DeleteBlock {
 }
 
 class Store extends ChangeNotifier {
-  Store._(this.isar, this.settings) {
-    _bootstrap();
-  }
+  Store._(this.isar, this.settings);
 
   final Isar isar;
   final AppSettings settings;
 
+  final StreamController<List<PdfDocument>> _docStream =
+      StreamController<List<PdfDocument>>.broadcast();
+
+  /// All vault documents, newest first.
+
   static Store? _instance;
 
   /// Open the database, seed on first launch, and build the store.
+  Future<void> _ensureSeeded() async {
+    if (isar.clients.countSync() > 0) return;
+    await isar.writeTxn(() async {
+      await seedAll(isar);
+    });
+    notifyListeners();
+  }
+
   static Future<Store> create() async {
     if (_instance != null) return _instance!;
     final isar = await Database.instance();
     final settings = await AppSettings.load(isar);
     _instance = Store._(isar, settings);
+    await _instance!._ensureSeeded();
     return _instance!;
   }
 
-  /// Test entry point: sandboxed Isar instance, no seeding side effects on the
-  /// real app data.
-  @visibleForTesting
-  static Future<Store> forTest(Isar isar) async {
-    final settings = await AppSettings.load(isar);
-    final store = Store._(isar, settings);
-    return store;
+  /// Look up the store created in main.dart.
+  static Store of(BuildContext context, {bool listen = true}) {
+    final scope = listen
+        ? context.dependOnInheritedWidgetOfExactType<_StoreScope>()
+        : context.findAncestorWidgetOfExactType<_StoreScope>();
+    assert(scope != null, 'No Store ancestor. Wrap the app in StoreProvider.');
+    return scope!.store;
   }
 
+  /// Singleton accessor for code outside the widget tree.
   static Store get instance {
     final s = _instance;
-    if (s == null) {
-      throw StateError('Store not ready - await Store.create() first');
-    }
-    return s;
+    assert(s != null, 'Store has not been created yet.');
+    return s!;
   }
 
-  @override
-  void dispose() {
-    for (final watcher in _watchers) {
-      watcher.cancel();
-    }
-    _watchers.clear();
-    _subscription.cancel();
-    super.dispose();
+
+  // ---------------------- Editor drafts ----------------------
+
+  /// A fresh, unsaved invoice the editor starts from.
+  Invoice newInvoiceDraft({bool quotation = false}) {
+    final kind = quotation ? 'quotation' : 'invoice';
+    final prefix = quotation ? 'QUO' : 'INV';
+    final year = DateTime.now().year;
+    final seq = (isar.invoices
+                .filter()
+                .numberContains('$prefix-$year')
+                .countSync()) +
+        1;
+    return Invoice.dated(
+      invoiceId: 'draft_${DateTime.now().millisecondsSinceEpoch}',
+      number: '$prefix-$year-${seq.toString().padLeft(4, '0')}',
+      type: kind,
+      status: 'draft',
+      clientId: clients.isNotEmpty ? clients.first.clientId : '',
+      template: settings.activeTemplate,
+      itemsJson: '[]',
+    );
   }
 
-  // ---------------------------------------------------------------- bootstrap
+  /// Persist a draft as a real invoice.
+  Future<Invoice> saveInvoice(Invoice draft) async {
+    final isQuote = draft.type == 'quotation';
+    final kind = isQuote ? 'quotation' : 'invoice';
+    final prefix = isQuote ? 'QUO' : 'INV';
+    final year = DateTime.now().year;
+    final seq = (isar.invoices
+                .filter()
+                .numberContains('$prefix-$year')
+                .countSync()) +
+        1;
+    final number = '$prefix-$year-${seq.toString().padLeft(4, '0')}';
 
-  late final StreamSubscription _subscription;
-  final List<StreamSubscription> _watchers = [];
+    final saved = Invoice(
+      invoiceId: draft.invoiceId.startsWith('draft_')
+          ? 'inv_${DateTime.now().millisecondsSinceEpoch}'
+          : draft.invoiceId,
+      number: draft.invoiceId.startsWith('draft_') ? number : draft.number,
+      type: kind,
+      status: draft.status.isEmpty ? 'sent' : draft.status,
+      clientId: draft.clientId,
+      template: draft.template,
+      fromName: draft.fromName,
+      fromEmail: draft.fromEmail,
+      fromPhone: draft.fromPhone,
+      toName: draft.toName,
+      toEmail: draft.toEmail,
+      toCompany: draft.toCompany,
+      toAddress: draft.toAddress,
+      poNumber: draft.poNumber,
+      itemsJson: draft.itemsJson,
+      globalDiscount: draft.globalDiscount,
+      shipping: draft.shipping,
+      currency: draft.currency,
+      notes: draft.notes,
+      paymentInfo: draft.paymentInfo,
+      accent: draft.accent,
+      accentName: draft.accentName,
+      issueDate: draft.issueDate,
+      dueDate: draft.dueDate,
+      createdAt: draft.createdAt,
+      updatedAt: DateTime.now(),
+    );
 
-  void _bootstrap() {
-    if (isar.clients.where().isEmptySync()) {
-      seed();
-    }
-    // Reactive: any collection write from anywhere triggers a refresh.
-    final changes = StreamController<void>.broadcast();
-    void watch(Stream<void> stream) {
-      _watchers.add(stream.listen((_) => changes.add(null)));
-    }
-
-    watch(isar.clients.watchLazy());
-    watch(isar.invoices.watchLazy());
-    watch(isar.services.watchLazy());
-    watch(isar.pdfDocuments.watchLazy());
-    _subscription = changes.stream.listen((_) => notifyListeners());
-  }
-
-  /// Restore the demo content. Wipes everything first.
-  Future<void> seed() async {
     await isar.writeTxn(() async {
-      await isar.business.clear();
-      await isar.clients.clear();
-      await isar.services.clear();
-      await isar.invoices.clear();
-      await isar.pdfDocuments.clear();
-
-      await isar.business.put(seedBusiness());
-      await isar.clients.putAll(seedClients());
-      await isar.services.putAll(seedServices());
-      await isar.invoices.putAll(seedInvoices());
-    });
-    settings.numberInvoice = 2044;
-    settings.numberQuotation = 2044;
-    settings.activeTemplate = 'executive';
-    await settings.persist();
-    notifyListeners();
-  }
-
-  // ---------------------------------------------------- template gallery
-
-  /// A gallery sample waiting to be opened in the editor. Set by the template
-  /// gallery screen, consumed once by the editor on boot.
-  Invoice? _templateSample;
-
-  void offerTemplateSample(Invoice sample) => _templateSample = sample;
-
-  Invoice? consumeTemplateSample() {
-    final s = _templateSample;
-    _templateSample = null;
-    return s;
-  }
-
-  // ---------------------------------------------------------------- business
-
-  Business get business {
-    final b = isar.business.where().findFirstSync();
-    return b ?? seedBusiness();
-  }
-
-  Future<void> updateBusiness(Business next) async {
-    await isar.writeTxn(() async {
-      await isar.business.put(next);
+      await isar.invoices.put(saved);
     });
     notifyListeners();
+    return saved;
   }
 
-  // ---------------------------------------------------------------- clients
-
-  List<Client> get clients =>
-      isar.clients.where().sortByClientId().findAllSync();
-
-  Client? clientById(String id) {
-    if (id.isEmpty) return null;
-    return isar.clients
-        .filter()        .clientIdEqualTo(id)
-        .findFirstSync();
-  }
-
-  Future<Client> upsertClient(Client client) async {
-    final now = DateTime.now();
-    final next = client..updatedAt = now;
-    if (next.clientId.isEmpty) {
-      next.clientId = 'cl_${now.millisecondsSinceEpoch}';
-    }
-    await isar.writeTxn(() async {
-      await isar.clients.put(next);
-    });
-    notifyListeners();
-    return next;
-  }
-
-  /// Refuse while invoices still reference the client, matching the prototype.
-  Future<DeleteBlock> deleteClient(String clientId) async {
-    final used = isar.invoices
+  /// Take a gallery sample, open it in the editor, and drop it from the
+  /// gallery so the template can only be used once per invoice.
+  Invoice? consumeTemplateSample(String templateId) {
+    final sample = isar.invoices
         .filter()
-        .clientIdEqualTo(clientId)
-        .countSync();
-    if (used > 0) {
-      return DeleteBlock(
-          blocked: true,
-          message: 'Client is used by $used document${used == 1 ? '' : 's'} - remove those first');
-    }
+        .templateEqualTo(templateId)
+        .statusEqualTo('template')
+        .findFirstSync();
+    if (sample == null) return null;
+    final draft = sample.copy();
+    draft
+      ..invoiceId = 'draft_${DateTime.now().millisecondsSinceEpoch}'
+      ..status = 'draft'
+      ..number = ''
+      ..type = 'invoice';
+    return draft;
+  }
+
+
+  /// Clone an invoice as a new draft, bumping nothing but the ids.
+  Invoice duplicateInvoice(Invoice source) {
+    final copy = source.copy();
+    copy
+      ..invoiceId = 'draft_${DateTime.now().millisecondsSinceEpoch}'
+      ..number = ''
+      ..status = 'draft';
+    return copy;
+  }
+
+  /// Transition a document between statuses.
+  Future<void> updateInvoiceStatus(String invoiceId, String status) async {
+    final invoice = invoiceById(invoiceId);
+    if (invoice == null) return;
+    invoice.status = status;
+    invoice.updatedAt = DateTime.now();
     await isar.writeTxn(() async {
-      await isar.clients
-          .filter()
-          .clientIdEqualTo(clientId)
-          .deleteAll();
+      await isar.invoices.put(invoice);
+    });
+    notifyListeners();
+  }
+
+
+  /// Persist the business profile.
+  Future<void> upsertBusiness(Business business) async {
+    await isar.writeTxn(() async {
+      await isar.business.put(business);
+    });
+    notifyListeners();
+  }
+
+  /// The business profile, never null (a blank one is used until set up).
+  Business get businessOrDefault =>
+      isar.business.where().findFirstSync() ?? Business();
+
+  /// Next document number for [kind] ('invoice' | 'quotation').
+  String nextNumber(String kind) {
+    final isQuote = kind == 'quotation';
+    final prefix = isQuote ? 'QUO' : 'INV';
+    final year = DateTime.now().year;
+    final seq = isar.invoices
+            .filter()
+            .numberContains('$prefix-$year')
+            .countSync() +
+        1;
+    return '$prefix-$year-${seq.toString().padLeft(4, '0')}';
+  }
+
+  /// Most recently issued document, for the Preview screen.
+  Invoice? latestInvoice() {
+    final list = isar.invoices
+        .filter()
+        .not()
+        .statusEqualTo('template')
+        .sortByIssueDateDesc()
+        .findFirstSync();
+    return list;
+  }
+
+  // ---------------------- Collections ----------------------
+
+  List<Client> get clients => isar.clients.where().findAllSync();
+  List<Service> get services => isar.services.where().findAllSync();
+  List<Invoice> get invoices =>
+      isar.invoices.where().sortByIssueDateDesc().findAllSync();
+  List<Invoice> get quotations => invoices.where((i) => i.isQuote).toList();
+  Business? get business => isar.business.where().findFirstSync();
+
+  Client? clientById(String id) =>
+      isar.clients.filter().clientIdEqualTo(id).findFirstSync();
+
+  Service? serviceById(String id) =>
+      isar.services.filter().serviceIdEqualTo(id).findFirstSync();
+
+  Invoice? invoiceById(String id) =>
+      isar.invoices.filter().invoiceIdEqualTo(id).findFirstSync();
+
+  // ---------------------- CRUD ----------------------
+
+  Future<void> upsertClient(Client client) async {
+    await isar.writeTxn(() async {
+      await isar.clients.put(client);
+    });
+    notifyListeners();
+  }
+
+  Future<DeleteBlock> deleteClient(String clientId) async {
+    final used = invoices.where((i) => i.clientId == clientId).isNotEmpty;
+    if (used) {
+      return const DeleteBlock(
+        blocked: true,
+        message: 'This client appears on existing documents and cannot be '
+            'deleted. Remove or reassign those documents first.',
+      );
+    }
+    final client = clientById(clientId);
+    if (client == null) return const DeleteBlock(blocked: false, message: '');
+    await isar.writeTxn(() async {
+      await isar.clients.delete(client.id!);
     });
     notifyListeners();
     return const DeleteBlock(blocked: false, message: '');
   }
 
-  // ---------------------------------------------------------------- services
-
-  List<Service> get services =>
-      isar.services.where().sortByName().findAllSync();
-
-  Service? serviceById(String id) {
-    if (id.isEmpty) return null;
-    return isar.services.filter().serviceIdEqualTo(id).findFirstSync();
-  }
-
-  Future<Service> upsertService(Service service) async {
-    if (service.serviceId.isEmpty) {
-      service.serviceId = 'sv_${DateTime.now().millisecondsSinceEpoch}';
-    }
+  Future<void> upsertService(Service service) async {
     await isar.writeTxn(() async {
       await isar.services.put(service);
     });
     notifyListeners();
-    return service;
   }
 
-  Future<void> deleteService(String serviceId) async {
+  Future<DeleteBlock> deleteService(String serviceId) async {
+    final used = invoices
+        .expand((i) => i.itemsList)
+        .where((li) => li.linkedServiceId == serviceId)
+        .isNotEmpty;
+    if (used) {
+      return const DeleteBlock(
+        blocked: true,
+        message: 'This service is referenced by existing invoices and cannot '
+            'be deleted.',
+      );
+    }
+    final service = serviceById(serviceId);
+    if (service == null) return const DeleteBlock(blocked: false, message: '');
     await isar.writeTxn(() async {
-      await isar.services
-          .filter()
-          .serviceIdEqualTo(serviceId)
-          .deleteAll();
+      await isar.services.delete(service.id!);
     });
     notifyListeners();
+    return const DeleteBlock(blocked: false, message: '');
   }
 
-  // ---------------------------------------------------------------- invoices
-
-  List<Invoice> get invoices =>
-      isar.invoices.where().findAllSync();
-
-  Invoice? invoiceById(String id) {
-    if (id.isEmpty) return null;
-    return isar.invoices.filter().invoiceIdEqualTo(id).findFirstSync();
-  }
-
-  /// Next document number for [type], advancing the counter as a side effect.
-  String nextNumber(String type) {
-    final isQuote = type == 'quotation';
-    final n = isQuote
-        ? settings.numberQuotation + 1
-        : settings.numberInvoice + 1;
-    if (isQuote) {
-      settings.numberQuotation = n;
-    } else {
-      settings.numberInvoice = n;
-    }
-    settings.persist();
-    final prefix = isQuote
-        ? settings.prefixQuotation
-        : settings.prefixInvoice;
-    return '$prefix-${n.toString().padLeft(4, '0')}';
-  }
-
-  /// A brand-new unsaved invoice draft - mirrors the prototype's
-  /// blankInvoice(): number burned immediately, business details prefilled,
-  /// one empty line, accent from settings. Not persisted until saved.
-  Invoice newInvoiceDraft({String? template, String type = 'invoice'}) {
-    final biz = business;
-    final a = accent;
-    return Invoice(
-      invoiceId: '',
-      number: nextNumber(type),
-      type: type,
-      status: 'draft',
-      template: template ?? settings.activeTemplate,
-      clientId: '',
-      fromName: biz.name,
-      fromEmail: biz.email,
-      itemsJson: jsonEncode([LineItem(id: _newItemId()).toJson()]),
-      currency: settings.currency,
-      notes: '',
-      paymentInfo: [
-        biz.bankName,
-        biz.bankAccount,
-        biz.swift,
-      ].where((s) => s.trim().isNotEmpty).join(' — '),
-      accent: _hexFromColor(a.a),
-      accentName: a.name,
-      issueDate: DateTime.now(),
-      dueDate: DateTime.now().add(const Duration(days: 14)),
-    );
-  }
-
-  /// Write an invoice. Returns the saved invoice.
-  Future<Invoice> saveInvoice(Invoice invoice) async {
-    final now = DateTime.now();
-    final existing = invoiceById(invoice.invoiceId);
-    if (existing != null) {
-      invoice.id = existing.id;
-      invoice.updatedAt = now;
-    } else {
-      if (invoice.invoiceId.isEmpty) {
-        invoice.invoiceId = 'inv_${now.millisecondsSinceEpoch}';
-      }
-      invoice.createdAt = now;
-      invoice.updatedAt = now;
-    }
+  Future<Invoice> upsertInvoice(Invoice invoice) async {
     await isar.writeTxn(() async {
       await isar.invoices.put(invoice);
     });
@@ -301,238 +316,293 @@ class Store extends ChangeNotifier {
     return invoice;
   }
 
-  Future<Invoice?> updateInvoiceStatus(String id, String status) async {
-    final inv = invoiceById(id);
-    if (inv == null) return null;
-    inv.status = status;
-    inv.updatedAt = DateTime.now();
+  Future<void> deleteInvoice(String invoiceId) async {
+    final invoice = invoiceById(invoiceId);
+    if (invoice == null) return;
     await isar.writeTxn(() async {
-      await isar.invoices.put(inv);
-    });
-    notifyListeners();
-    return inv;
-  }
-
-  /// Clone a document under a fresh number and id.
-  Future<Invoice?> duplicateInvoice(String id) async {
-    final inv = invoiceById(id);
-    if (inv == null) return null;
-    final copy = inv.copy()
-      ..invoiceId = 'inv_${DateTime.now().millisecondsSinceEpoch}'
-      ..number = nextNumber(inv.type)
-      ..status = 'draft'
-      ..items = inv.items.map((it) => it.copy()..id = 'li_${DateTime.now().millisecondsSinceEpoch}_${it.id}').toList()
-      ..createdAt = DateTime.now()
-      ..updatedAt = DateTime.now();
-    await isar.writeTxn(() async {
-      await isar.invoices.put(copy);
-    });
-    notifyListeners();
-    return copy;
-  }
-
-  Future<void> deleteInvoice(String id) async {
-    await isar.writeTxn(() async {
-      await isar.invoices
-          .filter()
-          .invoiceIdEqualTo(id)
-          .deleteAll();
+      await isar.invoices.delete(invoice.id!);
     });
     notifyListeners();
   }
 
-  /// Most recent document by issue date then number - not storage order.
-  /// (Web prototype bug #7: the old code read getInvoices()[0].)
-  Invoice? latestInvoice() {
-    final all = invoices;
-    if (all.isEmpty) return null;
-    all.sort((a, b) {
-      final c = b.issuedOn.compareTo(a.issuedOn);
-      return c != 0 ? c : b.number.compareTo(a.number);
-    });
-    return all.first;
-  }
+  // ---------------------- Queries ----------------------
 
-  // ---------------------------------------------------------------- history
-
-  /// Search by number, client, company, item or notes; filter by status and
-  /// type; sort by date, amount or number. Matches filterInvoices() exactly.
+  /// Filter the document history. Mirrors js/store.js filterInvoices.
   List<Invoice> filterInvoices({
-    String q = '',
+    String search = '',
     String status = 'all',
-    String type = 'all',
-    String clientId = '',
+    String clientId = 'all',
     String sort = 'date-desc',
   }) {
-    final needle = q.trim().toLowerCase();
-    var list = invoices.where((inv) {
-      if (status != 'all' && inv.status != status) return false;
-      if (type != 'all' && inv.type != type) return false;
-      if (clientId.isNotEmpty && inv.clientId != clientId) return false;
-      if (needle.isEmpty) return true;
-      final client = clientById(inv.clientId);
-      final haystack = [
-        inv.number,
-        inv.toName,
-        inv.toCompany,
-        client?.name ?? '',
-        inv.notes,
-        ...inv.items.map((i) => i.name),
-      ].join(' ').toLowerCase();
-      return haystack.contains(needle);
-    }).toList();
+    var list = isar.invoices.where().findAllSync();
 
-    int cmpDate(Invoice a, Invoice b, bool desc) {
-      final c = desc
-          ? b.issuedOn.compareTo(a.issuedOn)
-          : a.issuedOn.compareTo(b.issuedOn);
-      return c != 0 ? c : b.number.compareTo(a.number);
+    if (search.trim().isNotEmpty) {
+      final q = search.trim().toLowerCase();
+      list = list.where((i) {
+        final client = clientById(i.clientId);
+        return i.number.toLowerCase().contains(q) ||
+            (client?.name.toLowerCase().contains(q) ?? false) ||
+            i.itemsList.any((li) => li.description.toLowerCase().contains(q));
+      }).toList();
+    }
+
+    if (status != 'all') {
+      list = list.where((i) => i.status == status).toList();
+    }
+
+    if (clientId != 'all') {
+      list = list.where((i) => i.clientId == clientId).toList();
     }
 
     switch (sort) {
-      case 'date-desc':
-        list.sort((a, b) => cmpDate(a, b, true));
-        break;
       case 'date-asc':
-        list.sort((a, b) => cmpDate(a, b, false));
+        list.sort((a, b) => a.issuedOn.compareTo(b.issuedOn));
         break;
       case 'amount-desc':
-        list.sort((a, b) => invoiceAggregate(b).compareTo(invoiceAggregate(a)));
+        list.sort((a, b) =>
+            computeTotals(b).grandTotal.compareTo(computeTotals(a).grandTotal));
         break;
       case 'amount-asc':
-        list.sort((a, b) => invoiceAggregate(a).compareTo(invoiceAggregate(b)));
+        list.sort((a, b) =>
+            computeTotals(a).grandTotal.compareTo(computeTotals(b).grandTotal));
         break;
-      case 'number-asc':
-        list.sort((a, b) => a.number.compareTo(b.number));
+      case 'number-desc':
+        list.sort((a, b) => b.number.compareTo(a.number));
         break;
+      default:
+        list.sort((a, b) => b.issuedOn.compareTo(a.issuedOn));
     }
     return list;
   }
 
-  // ---------------------------------------------------------------- stats
+  // ---------------------- Derived stats ----------------------
 
-  /// Dashboard statistics. Aggregation mirrors the prototype's getStats().
+  /// Dashboard totals, mirroring getStats() in js/store.js.
   DashboardStats getStats() {
     final all = invoices;
-    var total = 0.0, paidSum = 0.0, outSum = 0.0, overSum = 0.0;
-    var paidCount = 0, outCount = 0, overCount = 0, draftCount = 0, quoteCount = 0;
+    var outstanding = 0.0;
+    var paid = 0.0;
+    var overdue = 0.0;
+    var draft = 0;
+
     for (final inv in all) {
-      final amount = invoiceAggregate(inv);
-      total += amount;
+      final t = computeTotals(inv);
+      if (inv.isQuote || inv.status == 'draft') {
+        draft++;
+        continue;
+      }
       switch (inv.status) {
         case 'paid':
-          paidSum += amount;
-          paidCount++;
+          paid += t.grandTotal;
           break;
-        case 'sent':
-        case 'partial':
         case 'overdue':
-          outSum += amount;
-          outCount++;
+          overdue += t.grandTotal;
+          outstanding += t.grandTotal;
           break;
+        default:
+          outstanding += t.grandTotal;
       }
-      if (inv.status == 'overdue') {
-        overSum += amount;
-        overCount++;
-      }
-      if (inv.status == 'draft') draftCount++;
-      if (inv.isQuotation) quoteCount++;
     }
+
+    final live = all.where((i) => !i.isQuote).toList();
+    final paidCount = live.where((i) => i.status == 'paid').length;
+    final overdueCount = live.where((i) => i.status == 'overdue').length;
+    final outstandingCount = live
+        .where((i) => i.status != 'paid' && i.status != 'draft')
+        .length;
+    final revenue = paid + outstanding;
     return DashboardStats(
-      totalRevenue: round2(total),
-      paid: round2(paidSum),
-      outstanding: round2(outSum),
-      overdue: round2(overSum),
-      invoiceCount: all.length,
+      totalRevenue: revenue,
+      paid: paid,
+      outstanding: outstanding,
+      overdue: overdue,
+      invoiceCount: live.length,
       paidCount: paidCount,
-      outstandingCount: outCount,
-      overdueCount: overCount,
-      draftCount: draftCount,
-      quotationCount: quoteCount,
+      outstandingCount: outstandingCount,
+      overdueCount: overdueCount,
+      draftCount: draft,
+      quotationCount: all.where((i) => i.isQuote).length,
       clientCount: clients.length,
       serviceCount: services.length,
-      avgInvoice: all.isEmpty ? 0 : total / all.length,
-      collectionRate: total == 0 ? 0 : (paidSum / total) * 100,
+      avgInvoice: live.isEmpty ? 0 : revenue / live.length,
+      collectionRate: revenue == 0 ? 0 : paid / revenue,
     );
   }
 
-  /// Six-month revenue series for the dashboard chart.
-  List<MonthPoint> getMonthlySeries([int months = 6]) {
+  /// Last six calendar months of billed revenue, oldest first.
+  List<MonthPoint> getMonthlySeries() {
     final now = DateTime.now();
-    final buckets = <MonthPoint>[];
-    for (var i = months - 1; i >= 0; i--) {
-      final d = DateTime(now.year, now.month - i, 1);
-      buckets.add(MonthPoint(
-        key: '${d.year}-${d.month.toString().padLeft(2, '0')}',
-        label: _monthLabel(d.month),
-        revenue: 0,
-        count: 0,
-      ));
+    final order = <DateTime>[];
+    final buckets = <DateTime, double>{};
+    for (var i = 5; i >= 0; i--) {
+      final key = DateTime(now.year, now.month - i);
+      order.add(key);
+      buckets[key] = 0.0;
     }
-    final index = {for (var i = 0; i < buckets.length; i++) buckets[i].key: i};
+
     for (final inv in invoices) {
-      final key = isoDateString(inv.issuedOn).substring(0, 7);
-      final i = index[key];
-      if (i != null) {
-        buckets[i] = MonthPoint(
-          key: buckets[i].key,
-          label: buckets[i].label,
-          revenue: round2(buckets[i].revenue + invoiceAggregate(inv)),
-          count: buckets[i].count + 1,
-        );
+      if (inv.isQuote || inv.status == 'draft') continue;
+      final key = DateTime(inv.issuedOn.year, inv.issuedOn.month);
+      if (buckets.containsKey(key)) {
+        buckets[key] = buckets[key]! + computeTotals(inv).grandTotal;
       }
     }
-    return buckets;
+
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final counts = <DateTime, int>{};
+    for (final inv in invoices) {
+      if (inv.isQuote || inv.status == 'draft') continue;
+      final key = DateTime(inv.issuedOn.year, inv.issuedOn.month);
+      if (counts.containsKey(key)) counts[key] = counts[key]! + 1;
+    }
+    return order
+        .map((k) => MonthPoint(
+              key: '${k.year}-${k.month.toString().padLeft(2, '0')}',
+              label: names[k.month - 1],
+              revenue: buckets[k]!,
+              count: counts[k] ?? 0,
+            ))
+        .toList();
   }
 
-  String _monthLabel(int month) => const [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ][month - 1];
 
-  // ---------------------------------------------------------------- PDF vault
+  // ------------------------- PDF vault -------------------------
 
-  List<PdfDocument> get documents =>
+  List<PdfDocument> allDocuments() =>
       isar.pdfDocuments.where().sortByGeneratedAtDesc().findAllSync();
 
-  PdfDocument? documentByInvoice(String invoiceId) {
-    if (invoiceId.isEmpty) return null;
-    return isar.pdfDocuments
-        .filter()        .invoiceIdEqualTo(invoiceId)
-        .findFirstSync();
+  Stream<List<PdfDocument>> watchDocuments() =>
+      _docStream.stream.map((e) => List.unmodifiable(e));
+
+  PdfDocument? documentById(String id) =>
+      isar.pdfDocuments.filter().docIdEqualTo(id).findFirstSync();
+
+  Future<void> shareDocument(PdfDocument doc) async {
+    await Share.shareXFiles([XFile(doc.storagePath)], text: doc.fileName);
   }
 
-  Future<PdfDocument> registerDocument(PdfDocument doc) async {
-    if (doc.docId.isEmpty) {
-      doc.docId = 'pdf_${DateTime.now().millisecondsSinceEpoch}';
+  Future<void> saveDocumentToDevice(BuildContext context, PdfDocument doc) async {
+    final bytes = await File(doc.storagePath).readAsBytes();
+    final picked = await FilePicker.saveFile(
+      dialogTitle: 'Save PDF',
+      fileName: doc.fileName,
+      mimeType: 'application/pdf',
+      bytes: bytes,
+    );
+    if (picked == null) return;
+    final dest = picked.toFilePath();
+    await File(doc.storagePath).copy(dest);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to ${p.basename(dest)}')),
+      );
     }
+  }
+
+  Future<void> printDocument(PdfDocument doc) async {
+    await Printing.layoutPdf(onLayout: (_) => File(doc.storagePath).readAsBytes());
+  }
+
+  Future<PdfDocument> indexGeneratedPdf({
+    required String storagePath,
+    required String invoiceId,
+    required String template,
+  }) async {
+    final file = File(storagePath);
+    final base = p.basename(storagePath);
+    final doc = PdfDocument(
+      docId: storagePath,
+      invoiceId: invoiceId,
+      number: '',
+      type: 'invoice',
+      template: template,
+      clientName: '',
+      fileName: base,
+      storagePath: storagePath,
+      bytes: await file.length(),
+      accent: '#1A2744',
+      generatedAt: DateTime.now(),
+    );
     await isar.writeTxn(() async {
       await isar.pdfDocuments.put(doc);
     });
+    _docStream.add(allDocuments());
     notifyListeners();
     return doc;
   }
 
-  /// Delete the vault entry only. The invoice stays unless the user asks for
-  /// that separately - the prompt is explicit about the distinction.
-  Future<void> deleteDocument(String docId) async {
-    final doc = isar.pdfDocuments
-        .filter()        .docIdEqualTo(docId)
-        .findFirstSync();
-    if (doc == null) return;
-    // Remove the app-private copy too, but never the invoice.
-    final f = File(doc.storagePath);
-    if (await f.exists()) {
-      await f.delete();
+  Future<void> reindexVault() async {
+    final dir = await _vaultDir();
+    final entries = <PdfDocument>[];
+    await for (final entity in dir.list()) {
+      if (entity is! File || !entity.path.endsWith('.pdf')) continue;
+      final stat = await entity.stat();
+      final base = p.basename(entity.path);
+      entries.add(PdfDocument(
+        docId: entity.path,
+        invoiceId: '',
+        number: '',
+        type: 'invoice',
+        template: _templateFromName(base),
+        clientName: '',
+        fileName: base,
+        storagePath: entity.path,
+        bytes: stat.size,
+        accent: '#1A2744',
+        generatedAt: stat.modified,
+      ));
     }
     await isar.writeTxn(() async {
-      await isar.pdfDocuments
-          .filter()
-          .docIdEqualTo(docId)
-          .deleteAll();
+      await isar.pdfDocuments.clear();
+      await isar.pdfDocuments.putAll(entries);
     });
+    _docStream.add(allDocuments());
     notifyListeners();
   }
+
+  /// Delete a vault entry and its on-disk copy. The invoice is untouched.
+  Future<void> deleteDocument(String docId) async {
+    final doc = documentById(docId);
+    if (doc == null) return;
+    final f = File(doc.storagePath);
+    if (await f.exists()) await f.delete();
+    await isar.writeTxn(() async {
+      await isar.pdfDocuments.delete(doc.id!);
+    });
+    _docStream.add(allDocuments());
+    notifyListeners();
+  }
+
+  Future<PdfDocument> generatePdfFor(Invoice invoice) async {
+    final bytes = await buildInvoicePdf(invoice);
+    final dir = await _vaultDir();
+    final name =
+        '${invoice.template}_${invoice.number}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+    final file = File('${dir.path}${p.separator}$name');
+    await file.writeAsBytes(bytes);
+    return indexGeneratedPdf(
+      storagePath: file.path,
+      invoiceId: invoice.id.toString(),
+      template: invoice.template,
+    );
+  }
+
+  Future<Directory> _vaultDir() async {
+    final root = await getApplicationDocumentsDirectory();
+    final dir = Directory('${root.path}${p.separator}pdfs');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir;
+  }
+
+  String _templateFromName(String name) {
+    final parts = name.replaceAll('.pdf', '').split('_');
+    return parts.length > 1 ? parts[0] : '';
+  }
+
+
 
   // ---------------------------------------------------------------- backup
 
@@ -543,10 +613,10 @@ class Store extends ChangeNotifier {
       'version': AppMeta.dataVersion,
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
       'data': {
-        'business': business.toJson(),
-        'clients': clients.map((c) => c.toJson()).toList(),
-        'services': services.map((s) => s.toJson()).toList(),
-        'invoices': invoices.map((i) => i.toJson()).toList(),
+        'business': (isar.business.where().findFirstSync() ?? Business()).toJson(),
+        'clients': isar.clients.where().findAllSync().map((c) => c.toJson()).toList(),
+        'services': isar.services.where().findAllSync().map((s) => s.toJson()).toList(),
+        'invoices': isar.invoices.where().findAllSync().map((i) => i.toJson()).toList(),
         'counters': {
           'invoice': settings.numberInvoice,
           'quotation': settings.numberQuotation,
@@ -669,6 +739,61 @@ class Store extends ChangeNotifier {
   Future<void> persistSettings() async {
     await settings.persist();
     notifyListeners();
+  }
+}
+
+/// Provides [Store] to the widget tree.
+class StoreProvider extends InheritedNotifier<ChangeNotifier> {
+  final Store store;
+
+  const StoreProvider({
+    super.key,
+    required this.store,
+    required super.child,
+  }) : super(notifier: store);
+
+  @override
+  bool updateShouldNotify(StoreProvider oldWidget) => store != oldWidget.store;
+}
+
+class _StoreScope extends InheritedNotifier<ChangeNotifier> {
+  final Store store;
+
+  const _StoreScope({required this.store, required super.child})
+      : super(notifier: store);
+}
+
+/// Lightweight wrapper that builds a [StoreProvider] once the store is open.
+class StoreBinder extends StatefulWidget {
+  final Widget child;
+  const StoreBinder({super.key, required this.child});
+
+  @override
+  State<StoreBinder> createState() => _StoreBinderState();
+}
+
+class _StoreBinderState extends State<StoreBinder> {
+  Store? _store;
+
+  @override
+  void initState() {
+    super.initState();
+    Store.create().then((s) {
+      if (mounted) setState(() => _store = s);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_store == null) {
+      return const Material(
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    return StoreProvider(store: _store!, child: widget.child);
   }
 }
 

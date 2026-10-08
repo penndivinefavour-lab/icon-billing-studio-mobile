@@ -17,7 +17,7 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = Store.instance;
     final stats = store.getStats();
-    final series = store.getMonthlySeries(6);
+    final series = store.getMonthlySeries();
     final recent = store.filterInvoices(sort: 'date-desc').take(5).toList();
 
     return Scaffold(

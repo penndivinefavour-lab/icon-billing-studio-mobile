@@ -422,27 +422,8 @@ final Map<String, TemplatePainter> _painters = {
 
 List<String> templateNames() => _painters.keys.toList();
 
-/// Render an invoice to a PDF document.
+/// Render an invoice to PDF bytes.
 Future<List<int>> buildInvoicePdf(Invoice invoice) async {
-  final ctx = ctxFor(invoice);
-  final doc = pw.Document();
-
-  final painter = _painters[invoice.template] ?? _executive;
-  final body = painter(ctx);
-
-  doc.addPage(
-    pw.MultiPage(
-      pageFormat: _pageFormat,
-      margin: const pw.EdgeInsets.all(_margin),
-      build: (context) => [body],
-    ),
-  );
-
-  return doc.save();
-}
-
-/// Synchronous variant used by tests and the sharing pipeline.
-List<int> buildInvoicePdfSync(Invoice invoice) {
   final ctx = ctxFor(invoice);
   final doc = pw.Document();
   final painter = _painters[invoice.template] ?? _executive;
@@ -455,6 +436,9 @@ List<int> buildInvoicePdfSync(Invoice invoice) {
   );
   return doc.save();
 }
+
+/// Synchronous variant used by tests and the sharing pipeline.
+Future<List<int>> buildInvoicePdfSync(Invoice invoice) => buildInvoicePdf(invoice);
 
 /* =============================================================== 1 minimal */
 
@@ -643,7 +627,7 @@ pw.Widget _modern(PdfContext ctx) {
                 ],
               ),
               pw.SizedBox(height: 20),
-              itemsTable(ctx, banded: true, zebra: ctx.accent.withOpacity(0.06)),
+              itemsTable(ctx, banded: true, zebra: tint(ctx.accent, 0.06)),
               pw.SizedBox(height: 20),
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -759,7 +743,7 @@ pw.Widget _creative(PdfContext ctx) {
         ],
       ),
       pw.SizedBox(height: 20),
-      itemsTable(ctx, banded: true, zebra: ctx.accent.withOpacity(0.07)),
+      itemsTable(ctx, banded: true, zebra: tint(ctx.accent, 0.07)),
       pw.SizedBox(height: 20),
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -829,8 +813,8 @@ pw.Widget _corporate(PdfContext ctx) {
             flex: 2,
             child: pw.Container(
               decoration: pw.BoxDecoration(
-                color: ctx.accent.withOpacity(0.06),
-                border: pw.Border.all(color: ctx.accent.withOpacity(0.25), width: 0.6),
+                color: tint(ctx.accent, 0.06),
+                border: pw.Border.all(color: tint(ctx.accent, 0.25), width: 0.6),
               ),
               padding: const pw.EdgeInsets.all(12),
               child: pw.Column(
@@ -1004,7 +988,7 @@ pw.Widget _bold(PdfContext ctx) {
       ),
       pw.SizedBox(height: 16),
       pw.Container(
-        color: ctx.accent.withOpacity(0.08),
+        color: tint(ctx.accent, 0.08),
         padding: const pw.EdgeInsets.all(10),
         child: metaBlock(ctx),
       ),
@@ -1080,7 +1064,7 @@ pw.Widget _professional(PdfContext ctx) {
         ],
       ),
       pw.SizedBox(height: 18),
-      itemsTable(ctx, banded: true, zebra: ctx.accent.withOpacity(0.05)),
+      itemsTable(ctx, banded: true, zebra: tint(ctx.accent, 0.05)),
       pw.SizedBox(height: 18),
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1109,9 +1093,11 @@ pw.Widget _professional(PdfContext ctx) {
       ),
       pw.SizedBox(height: 20),
       pw.Container(
-        decoration: pw.BoxBorder(
-          top: pw.BorderSide(color: ctx.accent, width: 1.2),
-          bottom: pw.BorderSide(color: ctx.accent, width: 1.2),
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            top: pw.BorderSide(color: ctx.accent, width: 1.2),
+            bottom: pw.BorderSide(color: ctx.accent, width: 1.2),
+          ),
         ),
         padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: pw.Row(

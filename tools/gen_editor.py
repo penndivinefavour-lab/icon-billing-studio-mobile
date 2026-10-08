@@ -44,7 +44,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _load() async {
     final id = widget.invoiceId;
     if (id == 'template') {
-      final pending = _store.consumeTemplateSample();
+      final pending = _store.consumeTemplateSample(templateId);
       if (pending != null) {
         setState(() {
           _draft = pending;

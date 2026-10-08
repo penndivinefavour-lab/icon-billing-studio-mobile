@@ -134,7 +134,7 @@ class TemplatesScreen extends StatelessWidget {
                           ? () {
                               final draft = sample.copy()
                                 ..invoiceId = ''
-                                ..number = store.nextNumber('invoice')
+                                ..number = Store.instance.newInvoiceDraft().number
                                 ..status = 'draft'
                                 ..template = t.id
                                 ..issueDate = DateTime.now()

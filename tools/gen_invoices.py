@@ -46,9 +46,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   }
 
   List<Invoice> get _filtered => _store.filterInvoices(
-        q: _query,
+        search: _query,
         status: _status,
-        type: _type,
+        clientId: 'all',
         sort: _sort,
       );
 

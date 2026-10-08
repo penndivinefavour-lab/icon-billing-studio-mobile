@@ -201,6 +201,9 @@ class LineItem {
     this.taxRate = 0,
   });
 
+  /// Service this line was built from, if any (used by delete guards).
+  String get linkedServiceId => '';
+
   /// Net for this line: qty x price minus the line discount.
   double get net =>
       round2(quantity * unitPrice * (1 - discount.clamp(0, 100) / 100));
@@ -243,6 +246,34 @@ class LineItem {
  * Derived money
  * ---------------------------------------------------------------------- */
 
+/// Dashboard headline numbers.
+class Stats {
+  final double outstanding;
+  final double paid;
+  final double overdue;
+  final int draftCount;
+  final int clientCount;
+  final int invoiceCount;
+  final int quotationCount;
+
+  const Stats({
+    this.outstanding = 0,
+    this.paid = 0,
+    this.overdue = 0,
+    this.draftCount = 0,
+    this.clientCount = 0,
+    this.invoiceCount = 0,
+    this.quotationCount = 0,
+  });
+}
+
+/// One bar of the revenue chart.
+class MonthlyPoint {
+  final String label;
+  final double value;
+  const MonthlyPoint({required this.label, this.value = 0});
+}
+
 /// One tax bucket shown in the totals block ("Tax 18%  ...").
 class TaxBucket {
   final double rate;
@@ -266,6 +297,9 @@ class Totals {
   final double total;
   final int itemCount;
   final double units;
+
+  /// The headline number. Mirrors the web prototype's naming.
+  double get grandTotal => total;
 
   const Totals({
     required this.subtotal,
@@ -402,6 +436,11 @@ class Invoice {
   /// Line items, decoded from [itemsJson]. Annotated so Isar's generator
   /// does not mistake the getter for a persisted property.
   @ignore
+  /// Alias the views use when they want the raw list without the setter.
+  List<LineItem> get itemsList => items;
+
+  bool get isQuote => type == 'quotation';
+
   List<LineItem> get items {
     try {
       final list = jsonDecode(itemsJson);
@@ -423,7 +462,7 @@ class Invoice {
   Totals get totals => computedTotals();
 
   /// Kept separate from the getter so Isar's generator ignores it cleanly.
-  Totals computedTotals() => computeTotals(items, this);
+  Totals computedTotals() => computeTotals(this);
 
   bool get isQuotation => type == _kQuotation;
   String get docLabel => isQuotation ? 'Quotation' : 'Invoice';
@@ -546,6 +585,16 @@ class PdfDocument {
   String accent;
 
   DateTime? generatedAt;
+
+  // --- read-only aliases used by the vault UI (kept narrow on purpose) ---
+  String get uuid => docId;
+  String get path => storagePath;
+  int get sizeBytes => bytes;
+  DateTime get created => generatedAt ?? DateTime.now();
+  String get sourceInvoiceId => invoiceId;
+  int get pageCount => _pageCount;
+
+  static const int _pageCount = 0;
 
   PdfDocument.dated({
     this.docId = '',
@@ -732,7 +781,8 @@ String isoDateString(DateTime d) {
 /// Rates are pooled per rate so the totals block can show "Tax 18%" rows
 /// instead of one opaque number. Byte-for-byte equivalent to the web
 /// prototype's computeTotals().
-Totals computeTotals(List<LineItem> items, Invoice invoice) {
+Totals computeTotals(Invoice invoice) {
+  final items = invoice.items;
   double subtotal = 0;
   double discountTotal = 0;
   final buckets = <double, double>{};

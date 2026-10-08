@@ -237,6 +237,9 @@ class EmptyState extends StatelessWidget {
     this.actionLabel,
     this.onAction,
     this.icon,
+    this.body,
+    this.action,
+    this.backgroundColor,
   });
 
   final String title;
@@ -244,6 +247,11 @@ class EmptyState extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
   final IconData? icon;
+
+  /// Alias for [message], used by screens written against the web prototype.
+  final String? body;
+  final Widget? action;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
