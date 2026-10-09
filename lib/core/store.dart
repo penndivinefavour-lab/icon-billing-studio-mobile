@@ -51,9 +51,7 @@ class Store extends ChangeNotifier {
   /// Open the database, seed on first launch, and build the store.
   Future<void> _ensureSeeded() async {
     if (isar.clients.countSync() > 0) return;
-    await isar.writeTxn(() async {
-      await seedAll(isar);
-    });
+    await seedAll(isar);
     notifyListeners();
   }
 
