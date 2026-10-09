@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- PDF sharing uses the system share sheet; saving uses the system
+         file picker (scoped storage, so no broad storage permission). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     <application
-        android:label="icon_billing_studio"
+        android:label="ICON Billing Studio"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

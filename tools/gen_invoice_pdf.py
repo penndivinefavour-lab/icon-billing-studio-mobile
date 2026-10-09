@@ -19,6 +19,10 @@ import '../models/models.dart';
 const _pageFormat = PdfPageFormat.a4;
 const _margin = 42.0;
 
+/// [PdfColor] is immutable, so tinting rebuilds the colour with a new alpha.
+PdfColor tint(PdfColor c, double alpha) =>
+    PdfColor(c.red, c.green, c.blue, alpha);
+
 /// Context handed to every template painter.
 class PdfContext {
   final Invoice invoice;
@@ -92,7 +96,7 @@ PdfContext ctxFor(Invoice invoice) {
 String formatMoneyPdf(double value, String currency) => formatMoney(value, currency);
 
 String formatDatePdf(DateTime? d) {
-  if (d == null) return '—';
+  if (d == null) return '-';
   return formatDate(d);
 }
 
@@ -111,6 +115,13 @@ String formatQuantityPdf(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();
   return value.toStringAsFixed(2);
 }
+
+/// Rows per page-sized chunk. [pw.MultiPage] can only break between top-level
+/// children, so a single giant Table is unbreakable; emit one chunk per page.
+const int _rowsPerPage = 18;
+
+/// Hard cap so a hostile document still renders.
+const int _maxItemRows = 200;
 
 /// The shared item table. Multi-page safe: the header repeats on every page
 /// and rows never clip.
@@ -135,10 +146,52 @@ pw.Widget itemsTable(PdfContext ctx, {bool banded = true, PdfColor? zebra}) {
     },
     children: [
       _headerRow(ctx),
-      for (int i = 0; i < inv.items.length; i++)
+      for (int i = 0; i < inv.items.length && i < _maxItemRows; i++)
         _itemRow(ctx, inv.items[i], i, banded: banded, band: band),
     ],
   );
+}
+
+/// [pw.MultiPage] paginates between top-level children, not inside a Table.
+/// Splitting the rows into page-sized chunks lets long invoices flow across
+/// pages instead of overflowing.
+List<pw.Widget> itemsTableChunked(PdfContext ctx,
+    {bool banded = true, PdfColor? zebra}) {
+  final inv = ctx.invoice;
+  final band = zebra ?? PdfColors.grey100;
+  final rows = inv.items.take(_maxItemRows).toList();
+  if (rows.length <= _rowsPerPage) return [itemsTable(ctx, banded: banded)];
+
+  final chunks = <pw.Widget>[];
+  for (var start = 0; start < rows.length; start += _rowsPerPage) {
+    final slice = rows.skip(start).take(_rowsPerPage).toList();
+    chunks.add(pw.Table(
+      border: pw.TableBorder(
+        horizontalInside: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
+        top: pw.BorderSide(color: PdfColors.grey400, width: 0.7),
+        bottom: pw.BorderSide(color: PdfColors.grey400, width: 0.7),
+      ),
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+      columnWidths: {
+        0: const pw.FlexColumnWidth(1.9),
+        1: const pw.FlexColumnWidth(0.55),
+        2: const pw.FlexColumnWidth(0.5),
+        3: const pw.FlexColumnWidth(0.8),
+        4: const pw.FlexColumnWidth(0.5),
+        5: const pw.FlexColumnWidth(0.5),
+        6: const pw.FlexColumnWidth(0.85),
+      },
+      children: [
+        if (start == 0) _headerRow(ctx),
+        for (int i = 0; i < slice.length; i++)
+          _itemRow(ctx, slice[i], start + i, banded: banded, band: band),
+      ],
+    ));
+    if (start + _rowsPerPage < rows.length) {
+      chunks.add(pw.SizedBox(height: 8));
+    }
+  }
+  return chunks;
 }
 
 pw.TableRow _headerRow(PdfContext ctx) {
@@ -146,7 +199,7 @@ pw.TableRow _headerRow(PdfContext ctx) {
     fontSize: 7.5,
     fontWeight: pw.FontWeight.bold,
     color: PdfColors.grey700,
-    letterSpacing: 0.4,
+    
   );
   return pw.TableRow(
     decoration: const pw.BoxDecoration(color: PdfColors.grey100),
@@ -211,12 +264,12 @@ pw.Widget totalsBlock(PdfContext ctx, {bool panel = false}) {
     _TotalRow('Subtotal', ctx.money(t.subtotal)),
   ];
   if (t.discountTotal > 0) {
-    rows.add(_TotalRow('Line discounts', '−${ctx.money(t.discountTotal)}'));
+    rows.add(_TotalRow('Line discounts', '-${ctx.money(t.discountTotal)}'));
   }
   if (t.globalDiscount > 0) {
     rows.add(_TotalRow(
         'Global discount (${ctx.invoice.globalDiscount.toStringAsFixed(0)}%)',
-        '−${ctx.money(t.globalDiscount)}'));
+        '-${ctx.money(t.globalDiscount)}'));
   }
   for (final tax in t.taxes) {
     rows.add(_TotalRow('Tax ${tax.rate.toStringAsFixed(0)}%', ctx.money(tax.amount)));
@@ -431,6 +484,7 @@ Future<List<int>> buildInvoicePdf(Invoice invoice) async {
     pw.MultiPage(
       pageFormat: _pageFormat,
       margin: const pw.EdgeInsets.all(_margin),
+      maxPages: 400,
       build: (context) => [painter(ctx)],
     ),
   );
@@ -468,7 +522,7 @@ pw.Widget _minimal(PdfContext ctx) {
                       )),
             ],
           ),
-          pw.Spacer(),
+          pw.SizedBox(height: 24),
           pw.Text(inv.fromName,
               style: pw.TextStyle(
                   fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
@@ -486,7 +540,7 @@ pw.Widget _minimal(PdfContext ctx) {
       pw.SizedBox(height: 18),
       metaBlock(ctx),
       pw.SizedBox(height: 18),
-      itemsTable(ctx),
+      ...itemsTableChunked(ctx),
       pw.SizedBox(height: 20),
       pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -495,7 +549,7 @@ pw.Widget _minimal(PdfContext ctx) {
           pw.Expanded(flex: 2, child: totalsBlock(ctx)),
         ],
       ),
-      pw.Spacer(),
+      pw.SizedBox(height: 24),
       pw.Container(
         margin: const pw.EdgeInsets.only(top: 18),
         padding: const pw.EdgeInsets.only(top: 10),
@@ -572,7 +626,7 @@ pw.Widget _executive(PdfContext ctx) {
         ],
       ),
       pw.SizedBox(height: 20),
-      itemsTable(ctx, banded: true),
+      ...itemsTableChunked(ctx),
       pw.SizedBox(height: 20),
       pw.Align(alignment: pw.Alignment.centerRight, child: totalsBlock(ctx, panel: true)),
       pw.SizedBox(height: 20),
@@ -689,7 +743,7 @@ pw.Widget _classic(PdfContext ctx) {
       pw.SizedBox(height: 12),
       metaBlock(ctx),
       pw.SizedBox(height: 14),
-      itemsTable(ctx),
+      ...itemsTableChunked(ctx),
       pw.SizedBox(height: 18),
       totalsBlock(ctx),
       pw.SizedBox(height: 18),
@@ -729,7 +783,7 @@ pw.Widget _creative(PdfContext ctx) {
                     color: ctx.onAccent,
                     )),
             pw.SizedBox(height: 10),
-            pw.Text('${ctx.fmt(inv.issuedOn)}  →  ${ctx.fmt(inv.dueOn)}',
+            pw.Text('${ctx.fmt(inv.issuedOn)}  ->  ${ctx.fmt(inv.dueOn)}',
                 style: pw.TextStyle(fontSize: 9, color: ctx.onAccent)),
           ],
         ),
@@ -802,7 +856,7 @@ pw.Widget _corporate(PdfContext ctx) {
               children: [
                 partyBlock('Client', inv, from: false),
                 pw.SizedBox(height: 16),
-                itemsTable(ctx, banded: true),
+                ...itemsTableChunked(ctx),
                 pw.SizedBox(height: 14),
                 notesBlock(inv),
               ],
@@ -856,11 +910,11 @@ pw.Widget _elegant(PdfContext ctx) {
                   style: pw.TextStyle(
                       fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
               pw.SizedBox(height: 6),
-              pw.Text('— ${ctx.docLabel} —',
+              pw.Text('- ${ctx.docLabel} -',
                   style: pw.TextStyle(
                       fontSize: 9,
                       color: PdfColors.grey600,
-                      letterSpacing: 1.4,
+                      
                       fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 2),
               pw.Text(inv.number,
@@ -882,7 +936,7 @@ pw.Widget _elegant(PdfContext ctx) {
         pw.SizedBox(height: 16),
         metaBlock(ctx),
         pw.SizedBox(height: 18),
-        itemsTable(ctx),
+        ...itemsTableChunked(ctx),
         pw.SizedBox(height: 20),
         totalsBlock(ctx),
         pw.SizedBox(height: 20),
@@ -918,18 +972,18 @@ pw.Widget _compact(PdfContext ctx) {
           margin: const pw.EdgeInsets.only(top: 4, bottom: 6),
           height: 1.2,
           color: ctx.accent),
-      pw.Text('${inv.fromEmail}${inv.fromPhone.isNotEmpty ? ' · ${inv.fromPhone}' : ''}',
+      pw.Text('${inv.fromEmail}${inv.fromPhone.isNotEmpty ? ' - ${inv.fromPhone}' : ''}',
           style: line.copyWith(color: PdfColors.grey600, fontSize: 7.5)),
       pw.SizedBox(height: 4),
       pw.Text(
-          'To: ${inv.toName}${inv.toCompany.isNotEmpty ? ' · ${inv.toCompany}' : ''} · ${inv.toEmail}',
+          'To: ${inv.toName}${inv.toCompany.isNotEmpty ? ' - ${inv.toCompany}' : ''} - ${inv.toEmail}',
           style: line.copyWith(color: PdfColors.grey700, fontSize: 7.5)),
       pw.SizedBox(height: 4),
       pw.Text(
           'Date: ${ctx.fmt(inv.issuedOn)}  Due: ${ctx.fmt(inv.dueOn)}${inv.poNumber.isNotEmpty ? '  PO: ${inv.poNumber}' : ''}',
           style: line.copyWith(color: PdfColors.grey700, fontSize: 7.5)),
       pw.SizedBox(height: 12),
-      itemsTable(ctx, banded: true),
+      ...itemsTableChunked(ctx),
       pw.SizedBox(height: 14),
       totalsBlock(ctx),
       pw.SizedBox(height: 12),
@@ -993,7 +1047,7 @@ pw.Widget _bold(PdfContext ctx) {
         child: metaBlock(ctx),
       ),
       pw.SizedBox(height: 18),
-      itemsTable(ctx),
+      ...itemsTableChunked(ctx),
       pw.SizedBox(height: 18),
       totalsBlock(ctx),
       pw.SizedBox(height: 18),

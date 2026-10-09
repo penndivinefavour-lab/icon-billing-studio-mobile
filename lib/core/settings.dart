@@ -6,6 +6,7 @@ library;
 
 import 'package:isar/isar.dart';
 
+
 part 'settings.g.dart';
 
 @collection

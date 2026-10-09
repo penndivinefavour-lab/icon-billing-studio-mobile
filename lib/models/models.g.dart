@@ -4059,88 +4059,93 @@ const InvoiceSchema = CollectionSchema(
       name: r'isQuotation',
       type: IsarType.bool,
     ),
-    r'issueDate': PropertySchema(
+    r'isQuote': PropertySchema(
       id: 15,
+      name: r'isQuote',
+      type: IsarType.bool,
+    ),
+    r'issueDate': PropertySchema(
+      id: 16,
       name: r'issueDate',
       type: IsarType.dateTime,
     ),
     r'issuedOn': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'issuedOn',
       type: IsarType.dateTime,
     ),
     r'itemsJson': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'itemsJson',
       type: IsarType.string,
     ),
     r'notes': PropertySchema(
-      id: 18,
+      id: 19,
       name: r'notes',
       type: IsarType.string,
     ),
     r'number': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'number',
       type: IsarType.string,
     ),
     r'paymentInfo': PropertySchema(
-      id: 20,
+      id: 21,
       name: r'paymentInfo',
       type: IsarType.string,
     ),
     r'poNumber': PropertySchema(
-      id: 21,
+      id: 22,
       name: r'poNumber',
       type: IsarType.string,
     ),
     r'shipping': PropertySchema(
-      id: 22,
+      id: 23,
       name: r'shipping',
       type: IsarType.double,
     ),
     r'status': PropertySchema(
-      id: 23,
+      id: 24,
       name: r'status',
       type: IsarType.string,
     ),
     r'template': PropertySchema(
-      id: 24,
+      id: 25,
       name: r'template',
       type: IsarType.string,
     ),
     r'toAddress': PropertySchema(
-      id: 25,
+      id: 26,
       name: r'toAddress',
       type: IsarType.string,
     ),
     r'toCompany': PropertySchema(
-      id: 26,
+      id: 27,
       name: r'toCompany',
       type: IsarType.string,
     ),
     r'toEmail': PropertySchema(
-      id: 27,
+      id: 28,
       name: r'toEmail',
       type: IsarType.string,
     ),
     r'toName': PropertySchema(
-      id: 28,
+      id: 29,
       name: r'toName',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 29,
+      id: 30,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 30,
+      id: 31,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'updatedOn': PropertySchema(
-      id: 31,
+      id: 32,
       name: r'updatedOn',
       type: IsarType.dateTime,
     )
@@ -4210,23 +4215,24 @@ void _invoiceSerialize(
   writer.writeDouble(offsets[12], object.globalDiscount);
   writer.writeString(offsets[13], object.invoiceId);
   writer.writeBool(offsets[14], object.isQuotation);
-  writer.writeDateTime(offsets[15], object.issueDate);
-  writer.writeDateTime(offsets[16], object.issuedOn);
-  writer.writeString(offsets[17], object.itemsJson);
-  writer.writeString(offsets[18], object.notes);
-  writer.writeString(offsets[19], object.number);
-  writer.writeString(offsets[20], object.paymentInfo);
-  writer.writeString(offsets[21], object.poNumber);
-  writer.writeDouble(offsets[22], object.shipping);
-  writer.writeString(offsets[23], object.status);
-  writer.writeString(offsets[24], object.template);
-  writer.writeString(offsets[25], object.toAddress);
-  writer.writeString(offsets[26], object.toCompany);
-  writer.writeString(offsets[27], object.toEmail);
-  writer.writeString(offsets[28], object.toName);
-  writer.writeString(offsets[29], object.type);
-  writer.writeDateTime(offsets[30], object.updatedAt);
-  writer.writeDateTime(offsets[31], object.updatedOn);
+  writer.writeBool(offsets[15], object.isQuote);
+  writer.writeDateTime(offsets[16], object.issueDate);
+  writer.writeDateTime(offsets[17], object.issuedOn);
+  writer.writeString(offsets[18], object.itemsJson);
+  writer.writeString(offsets[19], object.notes);
+  writer.writeString(offsets[20], object.number);
+  writer.writeString(offsets[21], object.paymentInfo);
+  writer.writeString(offsets[22], object.poNumber);
+  writer.writeDouble(offsets[23], object.shipping);
+  writer.writeString(offsets[24], object.status);
+  writer.writeString(offsets[25], object.template);
+  writer.writeString(offsets[26], object.toAddress);
+  writer.writeString(offsets[27], object.toCompany);
+  writer.writeString(offsets[28], object.toEmail);
+  writer.writeString(offsets[29], object.toName);
+  writer.writeString(offsets[30], object.type);
+  writer.writeDateTime(offsets[31], object.updatedAt);
+  writer.writeDateTime(offsets[32], object.updatedOn);
 }
 
 Invoice _invoiceDeserialize(
@@ -4247,21 +4253,21 @@ Invoice _invoiceDeserialize(
     fromPhone: reader.readStringOrNull(offsets[11]) ?? '',
     globalDiscount: reader.readDoubleOrNull(offsets[12]) ?? 0,
     invoiceId: reader.readStringOrNull(offsets[13]) ?? '',
-    issueDate: reader.readDateTimeOrNull(offsets[15]),
-    itemsJson: reader.readStringOrNull(offsets[17]) ?? '[]',
-    notes: reader.readStringOrNull(offsets[18]) ?? '',
-    number: reader.readStringOrNull(offsets[19]) ?? '',
-    paymentInfo: reader.readStringOrNull(offsets[20]) ?? '',
-    poNumber: reader.readStringOrNull(offsets[21]) ?? '',
-    shipping: reader.readDoubleOrNull(offsets[22]) ?? 0,
-    status: reader.readStringOrNull(offsets[23]) ?? 'draft',
-    template: reader.readStringOrNull(offsets[24]) ?? 'executive',
-    toAddress: reader.readStringOrNull(offsets[25]) ?? '',
-    toCompany: reader.readStringOrNull(offsets[26]) ?? '',
-    toEmail: reader.readStringOrNull(offsets[27]) ?? '',
-    toName: reader.readStringOrNull(offsets[28]) ?? '',
-    type: reader.readStringOrNull(offsets[29]) ?? _kInvoice,
-    updatedAt: reader.readDateTimeOrNull(offsets[30]),
+    issueDate: reader.readDateTimeOrNull(offsets[16]),
+    itemsJson: reader.readStringOrNull(offsets[18]) ?? '[]',
+    notes: reader.readStringOrNull(offsets[19]) ?? '',
+    number: reader.readStringOrNull(offsets[20]) ?? '',
+    paymentInfo: reader.readStringOrNull(offsets[21]) ?? '',
+    poNumber: reader.readStringOrNull(offsets[22]) ?? '',
+    shipping: reader.readDoubleOrNull(offsets[23]) ?? 0,
+    status: reader.readStringOrNull(offsets[24]) ?? 'draft',
+    template: reader.readStringOrNull(offsets[25]) ?? 'executive',
+    toAddress: reader.readStringOrNull(offsets[26]) ?? '',
+    toCompany: reader.readStringOrNull(offsets[27]) ?? '',
+    toEmail: reader.readStringOrNull(offsets[28]) ?? '',
+    toName: reader.readStringOrNull(offsets[29]) ?? '',
+    type: reader.readStringOrNull(offsets[30]) ?? _kInvoice,
+    updatedAt: reader.readDateTimeOrNull(offsets[31]),
   );
   object.id = id;
   return object;
@@ -4305,13 +4311,13 @@ P _invoiceDeserializeProp<P>(
     case 14:
       return (reader.readBool(offset)) as P;
     case 15:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 16:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 17:
-      return (reader.readStringOrNull(offset) ?? '[]') as P;
+      return (reader.readDateTime(offset)) as P;
     case 18:
-      return (reader.readStringOrNull(offset) ?? '') as P;
+      return (reader.readStringOrNull(offset) ?? '[]') as P;
     case 19:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 20:
@@ -4319,13 +4325,13 @@ P _invoiceDeserializeProp<P>(
     case 21:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 22:
-      return (reader.readDoubleOrNull(offset) ?? 0) as P;
-    case 23:
-      return (reader.readStringOrNull(offset) ?? 'draft') as P;
-    case 24:
-      return (reader.readStringOrNull(offset) ?? 'executive') as P;
-    case 25:
       return (reader.readStringOrNull(offset) ?? '') as P;
+    case 23:
+      return (reader.readDoubleOrNull(offset) ?? 0) as P;
+    case 24:
+      return (reader.readStringOrNull(offset) ?? 'draft') as P;
+    case 25:
+      return (reader.readStringOrNull(offset) ?? 'executive') as P;
     case 26:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 27:
@@ -4333,10 +4339,12 @@ P _invoiceDeserializeProp<P>(
     case 28:
       return (reader.readStringOrNull(offset) ?? '') as P;
     case 29:
-      return (reader.readStringOrNull(offset) ?? _kInvoice) as P;
+      return (reader.readStringOrNull(offset) ?? '') as P;
     case 30:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset) ?? _kInvoice) as P;
     case 31:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 32:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -5966,6 +5974,16 @@ extension InvoiceQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'isQuotation',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterFilterCondition> isQuoteEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isQuote',
         value: value,
       ));
     });
@@ -8026,6 +8044,18 @@ extension InvoiceQuerySortBy on QueryBuilder<Invoice, Invoice, QSortBy> {
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByIsQuote() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isQuote', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByIsQuoteDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isQuote', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> sortByIssueDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'issueDate', Sort.asc);
@@ -8425,6 +8455,18 @@ extension InvoiceQuerySortThenBy
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByIsQuote() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isQuote', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByIsQuoteDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isQuote', Sort.desc);
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QAfterSortBy> thenByIssueDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'issueDate', Sort.asc);
@@ -8731,6 +8773,12 @@ extension InvoiceQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Invoice, Invoice, QDistinct> distinctByIsQuote() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isQuote');
+    });
+  }
+
   QueryBuilder<Invoice, Invoice, QDistinct> distinctByIssueDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'issueDate');
@@ -8941,6 +8989,12 @@ extension InvoiceQueryProperty
   QueryBuilder<Invoice, bool, QQueryOperations> isQuotationProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isQuotation');
+    });
+  }
+
+  QueryBuilder<Invoice, bool, QQueryOperations> isQuoteProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isQuote');
     });
   }
 

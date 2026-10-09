@@ -10,6 +10,7 @@ import 'package:isar/isar.dart';
 
 part 'models.g.dart';
 
+
 const _kInvoice = 'invoice';
 const _kQuotation = 'quotation';
 
@@ -433,14 +434,15 @@ class Invoice {
 
   // ---------------------------------------------------------------- items
 
-  /// Line items, decoded from [itemsJson]. Annotated so Isar's generator
-  /// does not mistake the getter for a persisted property.
-  @ignore
   /// Alias the views use when they want the raw list without the setter.
+  @ignore
   List<LineItem> get itemsList => items;
 
   bool get isQuote => type == 'quotation';
 
+  /// Line items, decoded from [itemsJson]. @ignore keeps Isar's generator
+  /// from treating the derived list as a persisted property.
+  @ignore
   List<LineItem> get items {
     try {
       final list = jsonDecode(itemsJson);
@@ -750,7 +752,7 @@ class Business {
 const int _epochMillis = 946684800000;
 
 /// Round to two decimals without floating-point noise.
-double round2(double v) => (v + 1e-9).roundToDouble() / 100;
+double round2(double v) => ((v + 1e-9) * 100).roundToDouble() / 100;
 
 /// Parse 'yyyy-mm-dd' or an ISO datetime into a local [DateTime].
 DateTime? parseIsoDate(dynamic value) {
