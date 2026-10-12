@@ -1,4 +1,4 @@
-﻿library;
+library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +7,6 @@ import '../core/constants.dart';
 import '../core/store.dart';
 import '../core/seed.dart';
 import '../core/theme.dart';
-import '../models/models.dart';
 import '../ui/kit.dart';
 
 class TemplatesScreen extends StatelessWidget {
@@ -245,10 +244,7 @@ class _TemplateTile extends StatelessWidget {
                   if (isActive)
                     const Icon(AppIcons.check, size: 16, color: Colors.green)
                   else
-                    Container(
-                      width: 16,
-                      height: 16,
-                    ),
+                    const SizedBox(width: 16, height: 16),
                 ],
               ),
             ],

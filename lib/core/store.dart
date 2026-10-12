@@ -7,12 +7,9 @@
 /// stay declarative.
 library;
 
-import 'dart:convert';
-
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import 'package:share_plus/share_plus.dart';
@@ -47,6 +44,7 @@ class Store extends ChangeNotifier {
   /// All vault documents, newest first.
 
   static Store? _instance;
+  static Future<Store>? _initFuture;
 
   /// Open the database, seed on first launch, and build the store.
   Future<void> _ensureSeeded() async {
@@ -57,10 +55,23 @@ class Store extends ChangeNotifier {
 
   static Future<Store> create() async {
     if (_instance != null) return _instance!;
+    if (_initFuture != null) return _initFuture!;
+    _initFuture = _doCreate();
+    try {
+      final created = await _initFuture!;
+      return created;
+    } finally {
+      _initFuture = null;
+    }
+  }
+
+  static Future<Store> _doCreate() async {
+    if (_instance != null) return _instance!;
     final isar = await Database.instance();
     final settings = await AppSettings.load(isar);
-    _instance = Store._(isar, settings);
-    await _instance!._ensureSeeded();
+    final candidate = Store._(isar, settings);
+    await candidate._ensureSeeded();
+    _instance = candidate;
     return _instance!;
   }
 
@@ -272,7 +283,7 @@ class Store extends ChangeNotifier {
     final client = clientById(clientId);
     if (client == null) return const DeleteBlock(blocked: false, message: '');
     await isar.writeTxn(() async {
-      await isar.clients.delete(client.id!);
+      await isar.clients.delete(client.id);
     });
     notifyListeners();
     return const DeleteBlock(blocked: false, message: '');
@@ -300,7 +311,7 @@ class Store extends ChangeNotifier {
     final service = serviceById(serviceId);
     if (service == null) return const DeleteBlock(blocked: false, message: '');
     await isar.writeTxn(() async {
-      await isar.services.delete(service.id!);
+      await isar.services.delete(service.id);
     });
     notifyListeners();
     return const DeleteBlock(blocked: false, message: '');
@@ -318,7 +329,7 @@ class Store extends ChangeNotifier {
     final invoice = invoiceById(invoiceId);
     if (invoice == null) return;
     await isar.writeTxn(() async {
-      await isar.invoices.delete(invoice.id!);
+      await isar.invoices.delete(invoice.id);
     });
     notifyListeners();
   }
@@ -479,7 +490,12 @@ class Store extends ChangeNotifier {
       isar.pdfDocuments.filter().docIdEqualTo(id).findFirstSync();
 
   Future<void> shareDocument(PdfDocument doc) async {
-    await Share.shareXFiles([XFile(doc.storagePath)], text: doc.fileName);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(doc.storagePath)],
+        text: doc.fileName,
+      ),
+    );
   }
 
   Future<void> saveDocumentToDevice(BuildContext context, PdfDocument doc) async {
@@ -568,7 +584,7 @@ class Store extends ChangeNotifier {
     final f = File(doc.storagePath);
     if (await f.exists()) await f.delete();
     await isar.writeTxn(() async {
-      await isar.pdfDocuments.delete(doc.id!);
+      await isar.pdfDocuments.delete(doc.id);
     });
     _docStream.add(allDocuments());
     notifyListeners();
@@ -704,15 +720,6 @@ class Store extends ChangeNotifier {
   }
 
   String get activeTemplateName => templateName(settings.activeTemplate);
-
-  /// Fresh line-item id.
-  static String _newItemId() => 'li_${DateTime.now().microsecondsSinceEpoch}';
-
-  /// 0xFF6B21A8 -> '#6B21A8'
-  static String _hexFromColor(int value) {
-    final hex = value.toRadixString(16).padLeft(8, '0');
-    return '#${hex.substring(2)}'.toUpperCase();
-  }
 
   Future<void> setTheme(String theme) async {
     settings.theme = theme;

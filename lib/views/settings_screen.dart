@@ -1,4 +1,4 @@
-﻿library;
+library;
 
 import 'dart:convert';
 import 'dart:io';
@@ -321,7 +321,6 @@ class _ColorPickerState extends State<ColorPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final c = colors(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -660,7 +659,7 @@ class _NumberingSectionState extends State<_NumberingSection> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: settings.currency,
+                  initialValue: settings.currency,
                   decoration: const InputDecoration(labelText: 'Default currency'),
                   items: kCurrencies
                       .map((c) => DropdownMenuItem(value: c, child: Text(c)))
@@ -676,7 +675,7 @@ class _NumberingSectionState extends State<_NumberingSection> {
               const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: settings.activeTemplate,
+                  initialValue: settings.activeTemplate,
                   decoration: const InputDecoration(labelText: 'Default template'),
                   items: kTemplates
                       .map((t) => DropdownMenuItem(value: t.id, child: Text(t.name)))

@@ -158,10 +158,6 @@ class _ClientRow extends StatelessWidget {
     ].where((s) => s.isNotEmpty).join(', ');
     return ListRow(
       leading: Avatar(client.name, size: 38),
-      child: Meta(
-        title: client.name,
-        subtitle: [client.company, client.email].where((s) => s.isNotEmpty).join(' · '),
-      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -186,6 +182,10 @@ class _ClientRow extends StatelessWidget {
             visualDensity: VisualDensity.compact,
           ),
         ],
+      ),
+      child: Meta(
+        title: client.name,
+        subtitle: [client.company, client.email].where((s) => s.isNotEmpty).join(' · '),
       ),
     );
   }

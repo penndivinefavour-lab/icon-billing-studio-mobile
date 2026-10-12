@@ -2,7 +2,7 @@
 ///
 /// Mirrors the web prototype's JSON document shape exactly so a backup
 /// exported from the prototype imports here and vice versa.
-library icon_billing.models;
+library;
 
 import 'dart:convert';
 
@@ -748,8 +748,6 @@ class Business {
 /* ---------------------------------------------------------------------- *
  * Pure helpers shared by model + tests
  * ---------------------------------------------------------------------- */
-
-const int _epochMillis = 946684800000;
 
 /// Round to two decimals without floating-point noise.
 double round2(double v) => ((v + 1e-9) * 100).roundToDouble() / 100;

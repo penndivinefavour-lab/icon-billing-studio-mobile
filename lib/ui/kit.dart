@@ -59,7 +59,6 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final def = statusById(status);
-    final c = colors(context);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 7 : 9,
@@ -122,7 +121,7 @@ class Tag extends StatelessWidget {
         style: TextStyle(
           fontSize: compact ? 10.5 : 11.5,
           fontWeight: FontWeight.w600,
-          color: tone != null ? tone : c.text2,
+          color: tone ?? c.text2,
         ),
       ),
     );
@@ -215,7 +214,7 @@ class SectionCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
             const SizedBox(height: 14),
@@ -473,7 +472,7 @@ class PageHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) action!,
+          ?action,
         ],
       ),
     );

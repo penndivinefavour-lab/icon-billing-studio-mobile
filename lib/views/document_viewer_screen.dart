@@ -35,7 +35,7 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   }
 
   Future<void> _load() async {
-    final doc = await _store!.documentById(widget.documentId);
+    final doc = _store!.documentById(widget.documentId);
     if (doc == null || !await File(doc.path).exists()) {
       if (mounted) setState(() => _missing = true);
       return;

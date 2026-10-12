@@ -9,7 +9,6 @@ import '../core/format.dart';
 import '../core/store.dart';
 import '../models/models.dart';
 import '../ui/kit.dart';
-import 'document_viewer_screen.dart';
 
 class DocumentsScreen extends StatefulWidget {
   const DocumentsScreen({super.key});
@@ -129,7 +128,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                 sliver: SliverList.separated(
                   itemCount: docs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     return _DocumentCard(

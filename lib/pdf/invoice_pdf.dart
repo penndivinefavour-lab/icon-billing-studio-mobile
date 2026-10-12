@@ -91,17 +91,6 @@ String formatDatePdf(DateTime? d) {
   return formatDate(d);
 }
 
-/// Table column widths shared by the templates.
-final _colWidths = {
-  'name': 1.9,
-  'qty': 0.55,
-  'unit': 0.5,
-  'price': 0.8,
-  'disc': 0.5,
-  'tax': 0.5,
-  'amount': 0.85,
-};
-
 String formatQuantityPdf(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();
   return value.toStringAsFixed(2);
@@ -340,7 +329,7 @@ class _TotalRow {
 }
 
 /// Date rows used by most templates.
-List<_Meta> metaRows(PdfContext ctx) {
+List<_Meta> _metaRows(PdfContext ctx) {
   final inv = ctx.invoice;
   return [
     _Meta('Issue date', ctx.fmt(inv.issuedOn)),
@@ -359,7 +348,7 @@ pw.Widget metaBlock(PdfContext ctx) {
   return pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
-      for (final m in metaRows(ctx))
+      for (final m in _metaRows(ctx))
         pw.Padding(
           padding: const pw.EdgeInsets.only(bottom: 3),
           child: pw.Row(

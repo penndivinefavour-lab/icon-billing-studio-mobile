@@ -113,7 +113,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _duplicate() async {
     final copy = _store.duplicateInvoice(_draft);
-    if (copy == null || !mounted) return;
+    if (!mounted) return;
     showAppToast(context, 'Duplicated as ${copy.number}', success: true);
     context.go('/editor/${copy.invoiceId}');
   }
@@ -194,11 +194,11 @@ class _EditorScreenState extends State<EditorScreen> {
                 ListRow(
                   onTap: () => Navigator.pop(context, sv),
                   leading: Avatar(sv.name, size: 36),
+                  trailing: Icon(AppIcons.plus, size: 18, color: colors(context).accent),
                   child: Meta(
                     title: sv.name,
                     subtitle: '${sv.unit} · ${formatMoney(sv.price, _draft.currency)}',
                   ),
-                  trailing: Icon(AppIcons.plus, size: 18, color: colors(context).accent),
                 ),
               ],
             ],
@@ -341,7 +341,7 @@ class _PartiesCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: draft.clientId.isEmpty ? null : draft.clientId,
+            initialValue: draft.clientId.isEmpty ? null : draft.clientId,
             decoration: const InputDecoration(labelText: 'Load saved client'),
             items: [
               const DropdownMenuItem(value: null, child: Text('Choose a saved client…')),
@@ -788,7 +788,7 @@ class _TotalsCard extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: draft.template,
+                  initialValue: draft.template,
                   decoration: const InputDecoration(labelText: 'Template'),
                   items: kTemplates
                       .map((t) => DropdownMenuItem(value: t.id, child: Text(t.name)))
@@ -804,7 +804,7 @@ class _TotalsCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: draft.currency,
+                  initialValue: draft.currency,
                   decoration: const InputDecoration(labelText: 'Currency'),
                   items: kCurrencies
                       .map((c) => DropdownMenuItem(value: c, child: Text(c)))

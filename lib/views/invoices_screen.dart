@@ -63,7 +63,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
   Future<void> _duplicate(Invoice inv) async {
     final copy = _store.duplicateInvoice(inv);
-    if (copy == null || !mounted) return;
+    if (!mounted) return;
     showAppToast(context, 'Duplicated as ${copy.number}', success: true);
     if (mounted) context.go('/editor/${copy.invoiceId}');
   }
@@ -271,11 +271,6 @@ class _InvoiceRow extends StatelessWidget {
     return ListRow(
       onTap: onOpen,
       leading: Avatar(invoice.toName, size: 38),
-      child: Meta(
-        title: invoice.number,
-        subtitle:
-            '${invoice.toName}${invoice.toCompany.isNotEmpty ? ' · ${invoice.toCompany}' : ''}',
-      ),
       trailing: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
@@ -308,6 +303,11 @@ class _InvoiceRow extends StatelessWidget {
             ],
           ),
         ],
+      ),
+      child: Meta(
+        title: invoice.number,
+        subtitle:
+            '${invoice.toName}${invoice.toCompany.isNotEmpty ? ' · ${invoice.toCompany}' : ''}',
       ),
     );
   }
@@ -407,10 +407,10 @@ class _StatusSheet extends StatelessWidget {
               ListRow(
                 onTap: () => Navigator.pop(context, s.id),
                 leading: StatusPill(s.id),
-                child: Meta(title: statusHint(s.id)),
                 trailing: s.id == status
                     ? Icon(AppIcons.check, size: 18, color: colors(context).accent)
                     : null,
+                child: Meta(title: statusHint(s.id)),
               ),
             ],
           ],

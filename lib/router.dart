@@ -1,4 +1,4 @@
-﻿library;
+library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -44,6 +44,7 @@ class Routes {
 class AppRouter {
   static GoRouter config(Store store) {
     return GoRouter(
+      navigatorKey: _rootKey,
       initialLocation: '/${Routes.dashboard}',
       refreshListenable: store,
       routes: [
@@ -85,22 +86,22 @@ class AppRouter {
               path: '/${Routes.settings}',
               builder: (context, state) => const SettingsScreen(),
             ),
-            // Full-screen routes outside the bottom-nav shell.
-            GoRoute(
-              name: Routes.preview,
-              path: '/${Routes.preview}',
-              parentNavigatorKey: _rootKey,
-              builder: (context, state) => const PreviewScreen(),
-            ),
-            GoRoute(
-              name: Routes.editor,
-              path: '/${Routes.editor}/:invoiceId',
-              parentNavigatorKey: _rootKey,
-              builder: (context, state) => EditorScreen(
-                invoiceId: state.pathParameters['invoiceId'] ?? 'new',
-              ),
-            ),
           ],
+        ),
+        // Full-screen routes outside the bottom-nav shell.
+        GoRoute(
+          name: Routes.preview,
+          path: '/${Routes.preview}',
+          parentNavigatorKey: _rootKey,
+          builder: (context, state) => const PreviewScreen(),
+        ),
+        GoRoute(
+          name: Routes.editor,
+          path: '/${Routes.editor}/:invoiceId',
+          parentNavigatorKey: _rootKey,
+          builder: (context, state) => EditorScreen(
+            invoiceId: state.pathParameters['invoiceId'] ?? 'new',
+          ),
         ),
       ],
     );

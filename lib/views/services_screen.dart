@@ -1,7 +1,4 @@
-library;
-
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../core/format.dart' as fmt;
 import '../core/store.dart';
@@ -153,10 +150,6 @@ class _ServiceRow extends StatelessWidget {
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.accent),
         ),
       ),
-      child: Meta(
-        title: service.name,
-        subtitle: [service.category, fmt.formatMoney(service.price, 'USD')].where((s) => s.isNotEmpty).join(' · '),
-      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -171,6 +164,10 @@ class _ServiceRow extends StatelessWidget {
             visualDensity: VisualDensity.compact,
           ),
         ],
+      ),
+      child: Meta(
+        title: service.name,
+        subtitle: [service.category, fmt.formatMoney(service.price, 'USD')].where((s) => s.isNotEmpty).join(' · '),
       ),
     );
   }
@@ -226,8 +223,8 @@ class _ServiceFormState extends State<_ServiceForm> {
     final price = double.tryParse(_price.text) ?? 0;
     final taxRate = double.tryParse(_taxRate.text) ?? 0;
     final existing = widget.editing;
-    final service = existing != null ? existing : Service(name: name);
-      service.name = name;
+    final service = existing ?? Service(name: name);
+    service.name = name;
       service.description = _description.text.trim();
       service.price = price;
       service.taxRate = taxRate.clamp(0, 100);

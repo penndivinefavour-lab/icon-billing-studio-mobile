@@ -1,4 +1,4 @@
-﻿library;
+library;
 
 import 'dart:typed_data';
 
@@ -131,20 +131,32 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
                 child: Text('Select Template', style: Theme.of(ctx).textTheme.titleLarge),
               ),
-              for (final t in kTemplates)
-                ListTile(
-                  leading: Radio<String>(
-                    value: t.id,
-                    groupValue: _inv!.template,
-                    onChanged: (v) { if (v != null) { Navigator.pop(ctx); _switchTemplate(v); } },
-                  ),
-                  title: Text(t.name),
-                  subtitle: Text(t.blurb),
-                  trailing: _inv!.template == t.id
-                      ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
-                      : null,
-                  onTap: () => _switchTemplate(t.id),
+              RadioGroup<String>(
+                groupValue: _inv!.template,
+                onChanged: (v) {
+                  if (v != null) {
+                    Navigator.pop(ctx);
+                    _switchTemplate(v);
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final t in kTemplates)
+                      ListTile(
+                        leading: Radio<String>(
+                          value: t.id,
+                        ),
+                        title: Text(t.name),
+                        subtitle: Text(t.blurb),
+                        trailing: _inv!.template == t.id
+                            ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                            : null,
+                        onTap: () => _switchTemplate(t.id),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),

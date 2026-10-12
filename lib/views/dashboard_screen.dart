@@ -3,7 +3,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/constants.dart';
 import '../core/format.dart';
 import '../core/store.dart';
 import '../core/theme.dart';
@@ -279,7 +278,7 @@ class _RevenueChart extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           SizedBox(
-            height: 120,
+            height: 126,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -543,10 +542,6 @@ class _RecentRow extends StatelessWidget {
     return ListRow(
       onTap: () => context.go('/editor/${invoice.invoiceId}'),
       leading: Avatar(invoice.toName, size: 36),
-      child: Meta(
-        title: invoice.number,
-        subtitle: '${invoice.toName}${invoice.toCompany.isNotEmpty ? ' · ${invoice.toCompany}' : ''}',
-      ),
       trailing: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
@@ -575,6 +570,10 @@ class _RecentRow extends StatelessWidget {
             ],
           ),
         ],
+      ),
+      child: Meta(
+        title: invoice.number,
+        subtitle: '${invoice.toName}${invoice.toCompany.isNotEmpty ? ' · ${invoice.toCompany}' : ''}',
       ),
     );
   }

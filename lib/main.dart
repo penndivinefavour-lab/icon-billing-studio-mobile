@@ -1,12 +1,13 @@
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'core/constants.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'router.dart';
-import 'ui/kit.dart';
 
 /// Boot screen shown while Isar opens and the seed data is written.
 class _Splash extends StatelessWidget {
@@ -74,6 +75,67 @@ class _Splash extends StatelessWidget {
   }
 }
 
+/// Fallback screen when database initialization or startup fails.
+class _BootError extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+
+  const _BootError({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors(context);
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 30),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Initialization Failed',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.text),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: c.text2),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry Startup'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: c.accent,
+                  foregroundColor: c.onAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class IconBillingApp extends StatefulWidget {
   const IconBillingApp({super.key});
 
@@ -86,6 +148,7 @@ class _IconBillingAppState extends State<IconBillingApp> {
   String _theme = 'dark';
   AccentDef _accent = accentById('icon');
   bool _ready = false;
+  String? _initError;
 
   @override
   void initState() {
@@ -94,15 +157,33 @@ class _IconBillingAppState extends State<IconBillingApp> {
   }
 
   Future<void> _boot() async {
-    final store = await Store.create();
-    if (!mounted) return;
     setState(() {
-      _store = store;
-      _theme = store.settings.theme;
-      _accent = store.accent;
-      _ready = true;
+      _initError = null;
+      _ready = false;
     });
-    store.addListener(_onStoreChanged);
+
+    try {
+      final store = await Store.create().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw TimeoutException('Startup timed out after 30 seconds.'),
+      );
+      if (!mounted) return;
+      setState(() {
+        _store = store;
+        _theme = store.settings.theme;
+        _accent = store.accent;
+        _ready = true;
+      });
+      store.addListener(_onStoreChanged);
+    } catch (e, st) {
+      debugPrint('[BOOT ERROR] $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _initError = e is TimeoutException
+            ? 'Startup timed out. Please retry.'
+            : 'Failed to initialize database: ${e.toString().split('\n').first}';
+      });
+    }
   }
 
   void _onStoreChanged() {
@@ -127,6 +208,17 @@ class _IconBillingAppState extends State<IconBillingApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (_initError != null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.of(context, 'dark', accentById('icon')),
+        home: _BootError(
+          error: _initError!,
+          onRetry: _boot,
+        ),
+      );
+    }
+
     if (!_ready) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
