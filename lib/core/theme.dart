@@ -15,30 +15,30 @@ import 'constants.dart';
 
 /// Dark foundation (the prototype's default).
 class _Dark {
-  static const bg = Color(0xFF0E0F13);
-  static const bgElevated = Color(0xFF16181F);
-  static const surface = Color(0xFF1B1E26);
-  static const surface2 = Color(0xFF22262F);
-  static const surface3 = Color(0xFF2A2F3A);
-  static const border = Color(0xFF2C313C);
-  static const borderStrong = Color(0xFF3A404D);
-  static const text = Color(0xFFF4F5F7);
-  static const text2 = Color(0xFFB9BEC9);
-  static const text3 = Color(0xFF7E8494);
+  static const bg = Color(0xFF0F1117);
+  static const bgElevated = Color(0xFF161922);
+  static const surface = Color(0xFF1C202B);
+  static const surface2 = Color(0xFF252B3A);
+  static const surface3 = Color(0xFF30374A);
+  static const border = Color(0xFF32394A);
+  static const borderStrong = Color(0xFF47526B);
+  static const text = Color(0xFFF8FAFC);
+  static const text2 = Color(0xFFCBD5E1);
+  static const text3 = Color(0xFF94A3B8); // WCAG AA 6.3:1 against surface
 }
 
 /// Light foundation.
 class _Light {
-  static const bg = Color(0xFFF6F7F9);
+  static const bg = Color(0xFFF8FAFC);
   static const bgElevated = Color(0xFFFFFFFF);
   static const surface = Color(0xFFFFFFFF);
-  static const surface2 = Color(0xFFF1F3F6);
-  static const surface3 = Color(0xFFE4E8EE);
-  static const border = Color(0xFFDDE2EA);
-  static const borderStrong = Color(0xFFC4CBD6);
-  static const text = Color(0xFF14161B);
-  static const text2 = Color(0xFF4A5260);
-  static const text3 = Color(0xFF7E8798);
+  static const surface2 = Color(0xFFF1F5F9);
+  static const surface3 = Color(0xFFE2E8F0);
+  static const border = Color(0xFFCBD5E1);
+  static const borderStrong = Color(0xFF94A3B8);
+  static const text = Color(0xFF0F172A);
+  static const text2 = Color(0xFF334155);
+  static const text3 = Color(0xFF475569); // WCAG AA 7.6:1 against surface
 }
 
 /* ---------------------------------------------------------------- palette */
@@ -176,12 +176,26 @@ class AppTheme {
         brightness: base.brightness,
         primary: c.accent,
         onPrimary: c.onAccent,
+        primaryContainer: c.accent.withValues(alpha: dark ? 0.28 : 0.16),
+        onPrimaryContainer: dark ? Colors.white : c.accent,
         secondary: c.accentSoft,
         onSecondary: c.onAccent,
+        secondaryContainer: c.surface2,
+        onSecondaryContainer: c.text,
         error: dangerColor,
         onError: Colors.white,
+        errorContainer: dangerColor.withValues(alpha: dark ? 0.25 : 0.15),
+        onErrorContainer: dark ? Colors.white : dangerColor,
         surface: c.surface,
         onSurface: c.text,
+        onSurfaceVariant: c.text2,
+        surfaceContainerLowest: c.bg,
+        surfaceContainerLow: dark ? c.surface : c.surface2,
+        surfaceContainer: dark ? c.surface2 : c.bgElevated,
+        surfaceContainerHigh: dark ? c.surface3 : c.surface3,
+        surfaceContainerHighest: dark ? c.border : c.border,
+        outline: c.border,
+        outlineVariant: c.borderStrong,
       ),
       textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
         displayLarge: display.copyWith(fontSize: 28, fontWeight: FontWeight.w600, color: c.text, height: 1.15),
@@ -357,10 +371,15 @@ AppColors colors(BuildContext context) {
   final dark = t.brightness == Brightness.dark;
   final accent = t.colorScheme.primary;
   final soft = t.colorScheme.secondary;
-  return _lookup.putIfAbsent(accent.toARGB32(), () {
+  final key = '${dark ? "dark" : "light"}:${accent.toARGB32()}:${soft.toARGB32()}';
+  return _lookup.putIfAbsent(key, () {
     final value = accent.toARGB32();
     return dark ? AppColors.dark(value, soft.toARGB32()) : AppColors.light(value, soft.toARGB32());
   });
 }
 
-final Map<int, AppColors> _lookup = {};
+void clearThemeLookupCache() {
+  _lookup.clear();
+}
+
+final Map<String, AppColors> _lookup = {};

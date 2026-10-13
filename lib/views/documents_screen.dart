@@ -3,10 +3,12 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/format.dart';
 import '../core/store.dart';
+import '../core/theme.dart';
 import '../models/models.dart';
 import '../ui/kit.dart';
 
@@ -38,6 +40,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Future<void> _open(PdfDocument doc) async {
+    HapticFeedback.selectionClick();
     final file = File(doc.path);
     if (!await file.exists()) {
       if (mounted) {
@@ -165,7 +168,7 @@ class _DocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final c = colors(context);
     final size = doc.sizeBytes;
     final sizeLabel = size < 1024
         ? '$size B'
@@ -173,60 +176,79 @@ class _DocumentCard extends StatelessWidget {
             ? '${(size / 1024).toStringAsFixed(1)} KB'
             : '${(size / 1024 / 1024).toStringAsFixed(1)} MB';
 
-    return Material(
-      color: scheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(6),
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border, width: 0.8),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: c.accent.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.picture_as_pdf_rounded,
+                      color: c.accent, size: 24),
                 ),
-                alignment: Alignment.center,
-                child: Icon(Icons.picture_as_pdf_rounded,
-                    color: scheme.onPrimaryContainer, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(doc.fileName,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(doc.fileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: c.text,
+                          )),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${doc.template.isEmpty ? "Invoice" : doc.template} '
+                        'template · $sizeLabel · ${formatDate(doc.created)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${doc.template.isEmpty ? "Invoice" : doc.template} '
-                      'template - $sizeLabel - ${formatDate(doc.created)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: c.text3,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.ios_share_rounded),
-                tooltip: 'Share',
-                onPressed: onShare,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded),
-                tooltip: 'Delete',
-                onPressed: onDelete,
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.ios_share_rounded),
+                  tooltip: 'Share',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onShare();
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  tooltip: 'Delete',
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onDelete();
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

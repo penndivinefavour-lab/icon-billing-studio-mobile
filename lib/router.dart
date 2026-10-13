@@ -1,8 +1,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import 'models/models.dart';
 import 'core/store.dart';
 import 'core/theme.dart';
 import 'ui/kit.dart';
@@ -94,7 +96,14 @@ class AppRouter {
           name: Routes.preview,
           path: '/${Routes.preview}',
           parentNavigatorKey: _rootKey,
-          builder: (context, state) => const PreviewScreen(),
+          builder: (context, state) {
+            final id = state.uri.queryParameters['id'];
+            final invoice = state.extra is Invoice ? state.extra as Invoice : null;
+            return PreviewScreen(
+              invoiceId: id,
+              invoice: invoice,
+            );
+          },
         ),
         GoRoute(
           name: Routes.editor,
@@ -146,33 +155,34 @@ class _AppShell extends StatelessWidget {
         .indexWhere((n) => location.startsWith('/${n.name}'));
 
     return Scaffold(
-      body: SafeArea(
+      body: child,
+      bottomNavigationBar: SafeArea(
         top: false,
-        child: child,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: c.bgElevated,
-          border: Border(top: BorderSide(color: c.border, width: 0.6)),
-        ),
-        child: NavigationBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          height: 66,
-          selectedIndex: index < 0 ? 0 : index,
-          onDestinationSelected: (i) {
-            context.go('/${_navItems[i].name}');
-          },
-          indicatorColor: c.accent.withValues(alpha: 0.12),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            for (final n in _navItems)
-              NavigationDestination(
-                icon: Icon(n.icon, size: 21),
-                selectedIcon: Icon(n.selectedIcon, size: 21),
-                label: _label(n.name),
-              ),
-          ],
+        child: Container(
+          decoration: BoxDecoration(
+            color: c.bgElevated,
+            border: Border(top: BorderSide(color: c.border, width: 0.8)),
+          ),
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            height: 64,
+            selectedIndex: index < 0 ? 0 : index,
+            onDestinationSelected: (i) {
+              HapticFeedback.selectionClick();
+              context.go('/${_navItems[i].name}');
+            },
+            indicatorColor: c.accent.withValues(alpha: 0.28),
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: [
+              for (final n in _navItems)
+                NavigationDestination(
+                  icon: Icon(n.icon, size: 22, color: c.text3),
+                  selectedIcon: Icon(n.selectedIcon, size: 22, color: c.accent),
+                  label: _label(n.name),
+                ),
+            ],
+          ),
         ),
       ),
     );

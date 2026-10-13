@@ -3,13 +3,14 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-
-import '../models/models.dart';
-import '../ui/kit.dart';
 
 import '../core/format.dart';
 import '../core/store.dart';
+import '../models/models.dart';
+import '../ui/kit.dart';
 
 /// In-app PDF viewer with Share / Save-to-device / Print actions.
 class DocumentViewerScreen extends StatefulWidget {
@@ -55,44 +56,93 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
 
     if (_missing) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Document')),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(AppIcons.back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/documents');
+              }
+            },
+          ),
+          title: const Text('Document'),
+        ),
         body: EmptyState(
           icon: Icons.broken_image_outlined,
           title: 'Document unavailable',
           message: 'This file was removed from the device.',
           actionLabel: 'Back to vault',
-          onAction: () => Navigator.of(context).pop(),
+          onAction: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/documents');
+            }
+          },
         ),
       );
     }
 
     if (_doc == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Loading...')),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(AppIcons.back),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/documents');
+              }
+            },
+          ),
+          title: const Text('Loading...'),
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final file = File(_doc!.path);
+    final file = File(_doc!.storagePath);
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(AppIcons.back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/documents');
+            }
+          },
+        ),
         title: Text(_doc!.fileName, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             tooltip: 'Share',
             icon: const Icon(Icons.ios_share_rounded),
-            onPressed: () => _store!.shareDocument(_doc!),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _store!.shareDocument(_doc!);
+            },
           ),
           IconButton(
             tooltip: 'Save to device',
             icon: const Icon(Icons.save_alt_rounded),
-            onPressed: () => _store!.saveDocumentToDevice(context, _doc!),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _store!.saveDocumentToDevice(context, _doc!);
+            },
           ),
           IconButton(
             tooltip: 'Print',
             icon: const Icon(Icons.print_rounded),
-            onPressed: () => _store!.printDocument(_doc!),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _store!.printDocument(_doc!);
+            },
           ),
         ],
       ),

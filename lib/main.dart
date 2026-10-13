@@ -3,6 +3,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/constants.dart';
 import 'core/store.dart';
@@ -145,6 +146,7 @@ class IconBillingApp extends StatefulWidget {
 
 class _IconBillingAppState extends State<IconBillingApp> {
   Store? _store;
+  GoRouter? _router;
   String _theme = 'dark';
   AccentDef _accent = accentById('icon');
   bool _ready = false;
@@ -168,8 +170,10 @@ class _IconBillingAppState extends State<IconBillingApp> {
         onTimeout: () => throw TimeoutException('Startup timed out after 30 seconds.'),
       );
       if (!mounted) return;
+      final router = AppRouter.config(store);
       setState(() {
         _store = store;
+        _router = router;
         _theme = store.settings.theme;
         _accent = store.accent;
         _ready = true;
@@ -203,6 +207,7 @@ class _IconBillingAppState extends State<IconBillingApp> {
   @override
   void dispose() {
     _store?.removeListener(_onStoreChanged);
+    _router?.dispose();
     super.dispose();
   }
 
@@ -219,7 +224,7 @@ class _IconBillingAppState extends State<IconBillingApp> {
       );
     }
 
-    if (!_ready) {
+    if (!_ready || _router == null) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.of(context, 'dark', accentById('icon')),
@@ -231,19 +236,17 @@ class _IconBillingAppState extends State<IconBillingApp> {
     return AnimatedBuilder(
       animation: store,
       builder: (context, _) {
+        final currentTheme =
+            AppTheme.of(context, store.settings.theme, store.accent);
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: AppMeta.name,
-          theme: AppTheme.of(context, store.settings.theme, store.accent),
-          routerConfig: AppRouter.config(store),
-          builder: (context, child) {
-            return MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                padding: EdgeInsets.zero,
-              ),
-              child: child ?? const SizedBox.shrink(),
-            );
-          },
+          themeMode: store.settings.theme == 'light'
+              ? ThemeMode.light
+              : ThemeMode.dark,
+          theme: currentTheme,
+          darkTheme: currentTheme,
+          routerConfig: _router,
         );
       },
     );

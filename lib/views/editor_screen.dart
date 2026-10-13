@@ -256,7 +256,10 @@ class _EditorScreenState extends State<EditorScreen> {
             : 'New ${docLabel.toLowerCase()}'),
         actions: [
           IconButton(
-            onPressed: () => context.go('/preview'),
+            onPressed: () => context.push(
+              '/preview?id=${_draft.invoiceId}',
+              extra: _draft,
+            ),
             icon: const Icon(AppIcons.preview, size: 20),
             tooltip: 'Preview',
           ),

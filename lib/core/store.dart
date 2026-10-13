@@ -24,6 +24,7 @@ import 'constants.dart';
 import 'database.dart';
 import 'seed.dart';
 import 'settings.dart';
+import 'theme.dart';
 
 /// Reason a client cannot be deleted, when applicable.
 class DeleteBlock {
@@ -486,8 +487,41 @@ class Store extends ChangeNotifier {
   Stream<List<PdfDocument>> watchDocuments() =>
       _docStream.stream.map((e) => List.unmodifiable(e));
 
-  PdfDocument? documentById(String id) =>
-      isar.pdfDocuments.filter().docIdEqualTo(id).findFirstSync();
+  PdfDocument? documentById(String id) {
+    if (id.isEmpty) return null;
+    final decoded = Uri.decodeComponent(id).trim();
+
+    // 1. Exact match on logical docId
+    var found = isar.pdfDocuments.filter().docIdEqualTo(id).findFirstSync();
+    if (found != null) return found;
+    if (decoded != id) {
+      found = isar.pdfDocuments.filter().docIdEqualTo(decoded).findFirstSync();
+      if (found != null) return found;
+    }
+
+    // 2. Match on storagePath (backward-compatibility for legacy records)
+    found = isar.pdfDocuments.filter().storagePathEqualTo(id).findFirstSync();
+    if (found != null) return found;
+    if (decoded != id) {
+      found = isar.pdfDocuments.filter().storagePathEqualTo(decoded).findFirstSync();
+      if (found != null) return found;
+    }
+
+    // 3. Match on fileName
+    found = isar.pdfDocuments.filter().fileNameEqualTo(id).findFirstSync();
+    if (found != null) return found;
+    if (decoded != id) {
+      found = isar.pdfDocuments.filter().fileNameEqualTo(decoded).findFirstSync();
+      if (found != null) return found;
+    }
+
+    // 4. Try parsing integer id
+    final intId = int.tryParse(id) ?? int.tryParse(decoded);
+    if (intId != null) {
+      return isar.pdfDocuments.getSync(intId);
+    }
+    return null;
+  }
 
   Future<void> shareDocument(PdfDocument doc) async {
     await SharePlus.instance.share(
@@ -527,8 +561,11 @@ class Store extends ChangeNotifier {
   }) async {
     final file = File(storagePath);
     final base = p.basename(storagePath);
+    final cleanInv = invoiceId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '');
+    final logicalId =
+        'doc_${DateTime.now().millisecondsSinceEpoch}_${cleanInv.isNotEmpty ? cleanInv : "pdf"}';
     final doc = PdfDocument(
-      docId: storagePath,
+      docId: logicalId,
       invoiceId: invoiceId,
       number: '',
       type: 'invoice',
@@ -550,28 +587,58 @@ class Store extends ChangeNotifier {
 
   Future<void> reindexVault() async {
     final dir = await _vaultDir();
-    final entries = <PdfDocument>[];
-    await for (final entity in dir.list()) {
-      if (entity is! File || !entity.path.endsWith('.pdf')) continue;
-      final stat = await entity.stat();
-      final base = p.basename(entity.path);
-      entries.add(PdfDocument(
-        docId: entity.path,
-        invoiceId: '',
-        number: '',
-        type: 'invoice',
-        template: _templateFromName(base),
-        clientName: '',
-        fileName: base,
-        storagePath: entity.path,
-        bytes: stat.size,
-        accent: '#1A2744',
-        generatedAt: stat.modified,
-      ));
+    final existingDocs = isar.pdfDocuments.where().findAllSync();
+    final existingByPath = {for (final d in existingDocs) d.storagePath: d};
+    final seenPaths = <String>{};
+    final toSave = <PdfDocument>[];
+
+    if (await dir.exists()) {
+      await for (final entity in dir.list()) {
+        if (entity is! File || !entity.path.endsWith('.pdf')) continue;
+        seenPaths.add(entity.path);
+        final stat = await entity.stat();
+        final base = p.basename(entity.path);
+
+        var doc = existingByPath[entity.path];
+        if (doc != null) {
+          if (doc.docId.contains('/') || doc.docId.contains(r'\') || doc.docId.isEmpty) {
+            final cleanName = p.basenameWithoutExtension(base).replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+            doc.docId = 'doc_${stat.modified.millisecondsSinceEpoch}_$cleanName';
+          }
+          doc.bytes = stat.size;
+          doc.generatedAt ??= stat.modified;
+          toSave.add(doc);
+        } else {
+          final cleanName = p.basenameWithoutExtension(base).replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          toSave.add(PdfDocument(
+            docId: 'doc_${stat.modified.millisecondsSinceEpoch}_$cleanName',
+            invoiceId: '',
+            number: '',
+            type: 'invoice',
+            template: _templateFromName(base),
+            clientName: '',
+            fileName: base,
+            storagePath: entity.path,
+            bytes: stat.size,
+            accent: '#1A2744',
+            generatedAt: stat.modified,
+          ));
+        }
+      }
     }
+
+    final toDeleteIds = existingDocs
+        .where((d) => !seenPaths.contains(d.storagePath))
+        .map((d) => d.id)
+        .toList();
+
     await isar.writeTxn(() async {
-      await isar.pdfDocuments.clear();
-      await isar.pdfDocuments.putAll(entries);
+      if (toDeleteIds.isNotEmpty) {
+        await isar.pdfDocuments.deleteAll(toDeleteIds);
+      }
+      if (toSave.isNotEmpty) {
+        await isar.pdfDocuments.putAll(toSave);
+      }
     });
     _docStream.add(allDocuments());
     notifyListeners();
@@ -599,7 +666,7 @@ class Store extends ChangeNotifier {
     await file.writeAsBytes(bytes);
     return indexGeneratedPdf(
       storagePath: file.path,
-      invoiceId: invoice.id.toString(),
+      invoiceId: invoice.invoiceId.isNotEmpty ? invoice.invoiceId : invoice.id.toString(),
       template: invoice.template,
     );
   }
@@ -722,12 +789,14 @@ class Store extends ChangeNotifier {
   String get activeTemplateName => templateName(settings.activeTemplate);
 
   Future<void> setTheme(String theme) async {
+    clearThemeLookupCache();
     settings.theme = theme;
     await settings.persist();
     notifyListeners();
   }
 
   Future<void> setAccent(String accentId, [int? custom]) async {
+    clearThemeLookupCache();
     settings.accentId = accentId;
     settings.customAccent = custom;
     await settings.persist();

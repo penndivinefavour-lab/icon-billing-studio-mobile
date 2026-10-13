@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/format.dart';
@@ -358,10 +359,10 @@ class _QuickActions extends StatelessWidget {
 
   static const _actions = <_QuickAction>[
     _QuickAction(icon: AppIcons.document, label: 'New invoice', sub: 'Blank document', route: '/editor/new'),
+    _QuickAction(icon: AppIcons.documents, label: 'Document vault', sub: 'PDF archive', route: '/documents'),
     _QuickAction(icon: AppIcons.templates, label: 'Templates', sub: '10 layouts', route: '/templates'),
     _QuickAction(icon: AppIcons.clients, label: 'Add client', sub: 'Bill someone new', route: '/clients'),
     _QuickAction(icon: AppIcons.services, label: 'Add service', sub: 'Reusable item', route: '/services'),
-    _QuickAction(icon: AppIcons.preview, label: 'Preview', sub: 'Current document', route: '/preview'),
     _QuickAction(icon: AppIcons.settings, label: 'Branding', sub: 'Theme and accent', route: '/settings'),
   ];
 
@@ -374,7 +375,7 @@ class _QuickActions extends StatelessWidget {
           children: [
             for (int r = 0; r < (_actions.length / columns).ceil(); r++)
               Padding(
-                padding: EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
                   children: [
                     for (int i = r * columns; i < r * columns + columns; i++)
@@ -424,7 +425,10 @@ class _QuickActionTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => context.go(action.route),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          context.go(action.route);
+        },
         child: Container(
           padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
@@ -506,7 +510,17 @@ class _RecentDocuments extends StatelessWidget {
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => context.go('/invoices'),
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    context.go('/documents');
+                  },
+                  child: const Text('Vault'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    context.go('/invoices');
+                  },
                   child: const Text('History'),
                 ),
               ],
@@ -540,7 +554,10 @@ class _RecentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final due = relativeDue(invoice.dueDate, invoice.status);
     return ListRow(
-      onTap: () => context.go('/editor/${invoice.invoiceId}'),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        context.go('/editor/${invoice.invoiceId}');
+      },
       leading: Avatar(invoice.toName, size: 36),
       trailing: Column(
         crossAxisAlignment: CrossAxisAlignment.end,

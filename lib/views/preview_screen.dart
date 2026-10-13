@@ -1,10 +1,10 @@
 library;
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:pdfx/pdfx.dart' as pdfx;
+import 'package:printing/printing.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../core/constants.dart';
 import '../core/format.dart' as fmt;
@@ -15,7 +15,10 @@ import '../pdf/invoice_pdf.dart';
 import '../ui/kit.dart';
 
 class PreviewScreen extends StatefulWidget {
-  const PreviewScreen({super.key});
+  final String? invoiceId;
+  final Invoice? invoice;
+
+  const PreviewScreen({super.key, this.invoiceId, this.invoice});
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -26,7 +29,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
   bool _loading = true;
   bool _rendering = false;
   Uint8List? _bytes;
-  pdfx.PdfController? _pdfController;
+  final _pdfViewerController = PdfViewerController();
 
   @override
   void initState() {
@@ -36,18 +39,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   @override
   void dispose() {
-    _pdfController?.dispose();
+    _pdfViewerController.dispose();
     super.dispose();
   }
 
   void _loadInvoice() {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    Invoice? inv;
-    if (args is Invoice) {
-      inv = args;
-    } else {
-      inv = Store.instance.invoices.isEmpty ? null : Store.instance.invoices.first;
+    Invoice? inv = widget.invoice;
+    if (inv == null && widget.invoiceId != null && widget.invoiceId!.isNotEmpty) {
+      inv = Store.instance.invoiceById(widget.invoiceId!);
     }
+    if (inv == null && Store.instance.invoices.isNotEmpty) {
+      inv = Store.instance.invoices.first;
+    }
+
     setState(() {
       _inv = inv;
       _loading = false;
@@ -58,26 +62,24 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   Future<void> _renderPdf(Invoice inv) async {
-    setState(() { _rendering = true; });
+    setState(() {
+      _rendering = true;
+    });
     try {
       final bytes = await buildInvoicePdf(inv);
       if (!mounted) return;
-      _pdfController?.dispose();
-      _pdfController = pdfx.PdfController(
-        document: pdfx.PdfDocument.openData(Uint8List.fromList(bytes)),
-      );
       setState(() {
         _bytes = Uint8List.fromList(bytes);
         _rendering = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _rendering = false; });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not render PDF: $e')),
-        );
-      }
+      setState(() {
+        _rendering = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not render PDF: $e')),
+      );
     }
   }
 
@@ -86,19 +88,46 @@ class _PreviewScreenState extends State<PreviewScreen> {
     context.push('/editor/${_inv!.invoiceId.isEmpty ? 'new' : _inv!.invoiceId}');
   }
 
-  Future<void> _printPdf() async {
+  Future<void> _sharePdf() async {
     if (_inv == null) return;
     try {
+      HapticFeedback.lightImpact();
       final doc = await Store.instance.generatePdfFor(_inv!);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to vault: ${doc.fileName}')),
-      );
-      context.go('/documents');
+      await Store.instance.shareDocument(doc);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to generate PDF: $e')),
+        SnackBar(content: Text('Share failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _saveToVault() async {
+    if (_inv == null) return;
+    try {
+      HapticFeedback.lightImpact();
+      final doc = await Store.instance.generatePdfFor(_inv!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to Vault: ${doc.fileName}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Save failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _printPdf() async {
+    if (_bytes == null) return;
+    try {
+      HapticFeedback.lightImpact();
+      await Printing.layoutPdf(onLayout: (_) => _bytes!);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Print failed: $e')),
       );
     }
   }
@@ -180,7 +209,13 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(AppIcons.back),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/invoices');
+                      }
+                    },
                   ),
                   Expanded(
                     child: Column(
@@ -200,13 +235,24 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   ),
                   if (inv != null) ...[
                     IconButton(
-                      icon: const Icon(AppIcons.edit, size: 20),
-                      onPressed: _edit,
+                      icon: const Icon(AppIcons.share, size: 20),
+                      tooltip: 'Share',
+                      onPressed: _sharePdf,
                     ),
-                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(AppIcons.save, size: 20),
+                      tooltip: 'Save to Vault',
+                      onPressed: _saveToVault,
+                    ),
                     IconButton(
                       icon: const Icon(AppIcons.print, size: 20),
+                      tooltip: 'Print',
                       onPressed: _printPdf,
+                    ),
+                    IconButton(
+                      icon: const Icon(AppIcons.edit, size: 20),
+                      tooltip: 'Edit',
+                      onPressed: _edit,
                     ),
                   ],
                 ],
@@ -217,7 +263,15 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
                 child: Row(
                   children: [
-                    Text('TEMPLATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: c.text3, letterSpacing: 0.8)),
+                    Text(
+                      'TEMPLATE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c.text3,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
@@ -249,35 +303,19 @@ class _PreviewScreenState extends State<PreviewScreen> {
               )
             else
               Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 595),
-                    child: _rendering
-                        ? const Center(child: CircularProgressIndicator())
-                        : _bytes != null && _pdfController != null
-                            ? AspectRatio(
-                                aspectRatio: 595.28 / 841.89,
-                                child: Container(
-                                  color: Colors.white,
-                                  child: pdfx.PdfView(
-                                    controller: _pdfController!,
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                constraints: const BoxConstraints(maxWidth: 595),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: c.border),
-                                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, 4))],
-                                ),
-                                child: const Center(
-                                  child: Text('Render failed', style: TextStyle(color: Colors.grey)),
-                                ),
-                              ),
-                  ),
-                ),
+                child: _rendering
+                    ? const Center(child: CircularProgressIndicator())
+                    : _bytes != null
+                        ? SfPdfViewer.memory(
+                            _bytes!,
+                            controller: _pdfViewerController,
+                          )
+                        : const Center(
+                            child: Text(
+                              'Could not render preview',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
               ),
           ],
         ),
