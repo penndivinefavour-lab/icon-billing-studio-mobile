@@ -28,9 +28,9 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   final _controller = PdfViewerController();
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _store ??= Store.of(context);
+  void initState() {
+    super.initState();
+    _store = Store.instance;
     _load();
   }
 

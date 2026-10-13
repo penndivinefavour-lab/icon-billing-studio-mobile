@@ -8,6 +8,7 @@ import 'core/theme.dart';
 import 'ui/kit.dart';
 import 'views/clients_screen.dart';
 import 'views/dashboard_screen.dart';
+import 'views/document_viewer_screen.dart';
 import 'views/documents_screen.dart';
 import 'views/editor_screen.dart';
 import 'views/invoices_screen.dart';
@@ -101,6 +102,13 @@ class AppRouter {
           parentNavigatorKey: _rootKey,
           builder: (context, state) => EditorScreen(
             invoiceId: state.pathParameters['invoiceId'] ?? 'new',
+          ),
+        ),
+        GoRoute(
+          path: '/documents/view/:docId',
+          parentNavigatorKey: _rootKey,
+          builder: (context, state) => DocumentViewerScreen(
+            documentId: state.pathParameters['docId'] ?? '',
           ),
         ),
       ],

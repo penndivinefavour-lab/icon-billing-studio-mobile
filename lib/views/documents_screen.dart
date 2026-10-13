@@ -17,7 +17,7 @@ class DocumentsScreen extends StatefulWidget {
 }
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
-  late final Store _store = Store.of(context);
+  late final Store _store = Store.instance;
   bool _loading = true;
   String? _error;
 

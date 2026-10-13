@@ -142,7 +142,15 @@ class _EditorScreenState extends State<EditorScreen> {
         : _draft;
     setState(() => _draft = saved);
     if (!mounted) return;
-    context.go('/documents/generate/${saved.invoiceId}');
+    try {
+      final doc = await _store.generatePdfFor(saved);
+      if (!mounted) return;
+      showAppToast(context, 'Saved to vault: ${doc.fileName}', success: true);
+      context.push('/documents/view/${doc.docId}');
+    } catch (e) {
+      if (!mounted) return;
+      showAppToast(context, 'Failed to generate PDF: $e', error: true);
+    }
   }
 
   /* ---------------------------------------------------------------- items */
