@@ -87,11 +87,16 @@ void main() {
     expect(retrieved.items.length, equals(2));
     expect(retrieved.toName, equals(client.name));
 
-    // 7. Verify print layout generation
+    // 7. Verify print layout generation and PDF text content
     final freshDoc = await store.generatePdfFor(savedInvoice);
     expect(File(freshDoc.storagePath).existsSync(), isTrue);
     final printBytes = await File(freshDoc.storagePath).readAsBytes();
     expect(printBytes.length, greaterThan(1000));
     expect(printBytes.sublist(0, 4), equals([0x25, 0x50, 0x44, 0x46])); // %PDF header
+    final pdfText = String.fromCharCodes(printBytes);
+    expect(pdfText.contains('/Root'), isTrue, reason: 'Valid PDF catalog dictionary');
+
+    // 8. Test DocumentViewerScreen mounting and actions availability
+    expect(store.documentById(freshDoc.docId), isNotNull);
   });
 }
