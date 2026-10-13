@@ -81,6 +81,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /* ---------------------------------------------------------------- save */
 
   List<String> _validate() {
+    _draft.syncItemsJson();
     final problems = <String>[];
     if (_draft.fromName.trim().isEmpty) problems.add('Add your business name.');
     if (_draft.toName.trim().isEmpty) problems.add('Add a client name.');
@@ -92,6 +93,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _save() async {
+    _draft.syncItemsJson();
     final problems = _validate();
     if (problems.isNotEmpty) {
       showAppToast(context, problems.first, error: true);
@@ -132,6 +134,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _generatePdf() async {
+    _draft.syncItemsJson();
     final problems = _validate();
     if (problems.isNotEmpty) {
       showAppToast(context, problems.first, error: true);
@@ -157,18 +160,26 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _addItem([LineItem? preset]) {
     setState(() {
-      _draft.items.add(preset ?? LineItem(id: 'li_${DateTime.now().microsecondsSinceEpoch}'));
+      _draft.items.add(preset ??
+          LineItem(
+            id: 'li_${DateTime.now().microsecondsSinceEpoch}',
+            name: 'Item ${_draft.items.length + 1}',
+            unitPrice: 100,
+          ));
+      _draft.syncItemsJson();
     });
   }
 
   void _removeItem(int index) {
     if (_draft.items.length <= 1) return;
-    setState(() => _draft.items.removeAt(index));
+    setState(() {
+      _draft.items.removeAt(index);
+      _draft.syncItemsJson();
+    });
   }
 
   void _recalc() {
-    // Totals are derived from the model, so a rebuild is enough. This hook
-    // exists so animated totals can be triggered deliberately.
+    _draft.syncItemsJson();
     setState(() {});
   }
 
@@ -224,6 +235,7 @@ class _EditorScreenState extends State<EditorScreen> {
         unitPrice: picked.price,
         taxRate: picked.taxRate,
       ));
+      _draft.syncItemsJson();
     });
     showAppToast(context, 'Added “${picked.name}”', success: true);
   }
@@ -987,7 +999,7 @@ class _ActionsCard extends StatelessWidget {
 
 /* ---------------------------------------------------------------- fields */
 
-class _Text extends StatelessWidget {
+class _Text extends StatefulWidget {
   const _Text({
     required this.label,
     required this.value,
@@ -1001,16 +1013,43 @@ class _Text extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
+  State<_Text> createState() => _TextState();
+}
+
+class _TextState extends State<_Text> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_Text oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value && widget.value != _controller.text) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: TextEditingController(text: value),
-      decoration: InputDecoration(labelText: label, hintText: hint),
-      onChanged: onChanged,
+      controller: _controller,
+      decoration: InputDecoration(labelText: widget.label, hintText: widget.hint),
+      onChanged: widget.onChanged,
     );
   }
 }
 
-class _Num extends StatelessWidget {
+class _Num extends StatefulWidget {
   const _Num({
     required this.label,
     required this.value,
@@ -1024,19 +1063,48 @@ class _Num extends StatelessWidget {
   final ValueChanged<double> onChanged;
 
   @override
+  State<_Num> createState() => _NumState();
+}
+
+class _NumState extends State<_Num> {
+  late TextEditingController _controller;
+
+  String _format(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(_Num oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      final cur = double.tryParse(_controller.text);
+      if (cur == null || (cur - widget.value).abs() > 0.001) {
+        _controller.text = _format(widget.value);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: TextEditingController(
-        text: value == value.roundToDouble()
-            ? value.toInt().toString()
-            : value.toStringAsFixed(2),
-      ),
+      controller: _controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(labelText: widget.label),
       onChanged: (raw) {
         final parsed = double.tryParse(raw) ?? 0;
         final v = parsed < 0 ? 0.0 : parsed;
-        onChanged(clamp == null ? v : v.clamp(0, clamp!));
+        widget.onChanged(widget.clamp == null ? v : v.clamp(0, widget.clamp!));
       },
     );
   }

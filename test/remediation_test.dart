@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:icon_billing_studio/core/constants.dart';
 import 'package:icon_billing_studio/core/theme.dart';
+import 'package:icon_billing_studio/models/models.dart';
 
 double _luminance(Color c) {
   // Relative luminance calculation per WCAG 2.1
@@ -105,6 +106,40 @@ void main() {
       expect(docId, isNot(contains('/')));
       expect(docId, isNot(contains('\\')));
       expect(RegExp(r'^doc_\d+_inv_.*$').hasMatch(docId), isTrue);
+    });
+  });
+
+  group('Invoice items caching & synchronization tests', () {
+    test('items list caches mutation and syncs to itemsJson', () {
+      final inv = Invoice(
+        invoiceId: 'inv_cache_test',
+        itemsJson: '[]',
+      );
+
+      expect(inv.items.length, 0);
+
+      inv.items.add(LineItem(
+        id: 'li_1',
+        name: 'Design Consultation',
+        quantity: 2,
+        unitPrice: 150,
+      ));
+
+      expect(inv.items.length, 1);
+      inv.syncItemsJson();
+      expect(inv.itemsJson, contains('Design Consultation'));
+      expect(inv.itemsJson, contains('150'));
+
+      // Check totals derivation
+      final totals = inv.totals;
+      expect(totals.subtotal, 300.0);
+      expect(totals.total, 300.0);
+
+      // Check copy retains items
+      final copy = inv.copy();
+      expect(copy.items.length, 1);
+      expect(copy.items.first.name, 'Design Consultation');
+      expect(copy.items.first.unitPrice, 150.0);
     });
   });
 }

@@ -440,23 +440,39 @@ class Invoice {
 
   bool get isQuote => type == 'quotation';
 
+  @ignore
+  List<LineItem>? _itemsCache;
+
   /// Line items, decoded from [itemsJson]. @ignore keeps Isar's generator
   /// from treating the derived list as a persisted property.
   @ignore
   List<LineItem> get items {
-    try {
-      final list = jsonDecode(itemsJson);
-      if (list is! List) return [];
-      return list
-          .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      return [];
+    if (_itemsCache == null) {
+      try {
+        final list = jsonDecode(itemsJson);
+        if (list is List) {
+          _itemsCache = list
+              .map((e) => LineItem.fromJson(e as Map<String, dynamic>))
+              .toList();
+        } else {
+          _itemsCache = <LineItem>[];
+        }
+      } catch (_) {
+        _itemsCache = <LineItem>[];
+      }
     }
+    return _itemsCache!;
   }
 
   set items(List<LineItem> value) {
+    _itemsCache = value;
     itemsJson = jsonEncode(value.map((e) => e.toJson()).toList());
+  }
+
+  void syncItemsJson() {
+    if (_itemsCache != null) {
+      itemsJson = jsonEncode(_itemsCache!.map((e) => e.toJson()).toList());
+    }
   }
 
   /// Derived money breakdown.
@@ -475,7 +491,9 @@ class Invoice {
   DateTime get createdOn => createdAt ?? DateTime.now();
   DateTime get updatedOn => updatedAt ?? createdOn;
 
-  Invoice copy() => Invoice(
+  Invoice copy() {
+    syncItemsJson();
+    return Invoice(
         invoiceId: invoiceId,
         number: number,
         type: type,
@@ -503,6 +521,7 @@ class Invoice {
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
+  }
 
   factory Invoice.fromJson(Map<String, dynamic> j) {
     final items = (j['items'] as List?) ?? [];
@@ -782,6 +801,7 @@ String isoDateString(DateTime d) {
 /// instead of one opaque number. Byte-for-byte equivalent to the web
 /// prototype's computeTotals().
 Totals computeTotals(Invoice invoice) {
+  invoice.syncItemsJson();
   final items = invoice.items;
   double subtotal = 0;
   double discountTotal = 0;

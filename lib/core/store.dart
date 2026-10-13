@@ -105,12 +105,20 @@ class Store extends ChangeNotifier {
                 .numberContains('$prefix-$year')
                 .countSync()) +
         1;
+    final client = clients.isNotEmpty ? clients.first : null;
     return Invoice.dated(
       invoiceId: 'draft_${DateTime.now().millisecondsSinceEpoch}',
       number: '$prefix-$year-${seq.toString().padLeft(4, '0')}',
       type: kind,
       status: 'draft',
-      clientId: clients.isNotEmpty ? clients.first.clientId : '',
+      clientId: client?.clientId ?? '',
+      fromName: business?.name ?? '',
+      fromEmail: business?.email ?? '',
+      fromPhone: business?.phone ?? '',
+      toName: client?.name ?? '',
+      toEmail: client?.email ?? '',
+      toCompany: client?.company ?? '',
+      toAddress: client?.addressLineOne ?? '',
       template: settings.activeTemplate,
       itemsJson: '[]',
     );
@@ -118,6 +126,7 @@ class Store extends ChangeNotifier {
 
   /// Persist a draft as a real invoice.
   Future<Invoice> saveInvoice(Invoice draft) async {
+    draft.syncItemsJson();
     final isQuote = draft.type == 'quotation';
     final kind = isQuote ? 'quotation' : 'invoice';
     final prefix = isQuote ? 'QUO' : 'INV';
