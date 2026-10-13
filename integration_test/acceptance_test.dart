@@ -86,5 +86,12 @@ void main() {
     expect(retrieved!.number, equals(savedInvoice.number));
     expect(retrieved.items.length, equals(2));
     expect(retrieved.toName, equals(client.name));
+
+    // 7. Verify print layout generation
+    final freshDoc = await store.generatePdfFor(savedInvoice);
+    expect(File(freshDoc.storagePath).existsSync(), isTrue);
+    final printBytes = await File(freshDoc.storagePath).readAsBytes();
+    expect(printBytes.length, greaterThan(1000));
+    expect(printBytes.sublist(0, 4), equals([0x25, 0x50, 0x44, 0x46])); // %PDF header
   });
 }
